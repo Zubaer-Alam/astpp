@@ -1,4 +1,8 @@
 <?php
+// // Initialize dompdf
+// $options = new Options();
+// $options->set('isHtml5ParserEnabled', true);
+// $dompdf = new Dompdf($options);
 
 // ##############################################################################
 // ASTPP - Open Source VoIP Billing Solution
@@ -217,7 +221,110 @@ class Invoices extends MX_Controller
         echo json_encode($json_data);
     }
 
- function invoice_download($invoiceid)
+    private function _get_invoice_summary($invoiceid)
+    {
+        // 1) Load main invoice row
+        $inv = $this->db->get_where('view_invoices', ['id' => $invoiceid])->first_row();
+        if (!$inv) {
+            return null;
+        }
+
+        $accountid = $inv->accountid;
+        $current_from = $inv->from_date;
+
+        // ---- Step 1: previous_balance (all older invoices) ----
+        $prev_row = $this->db
+            ->select('COALESCE(SUM(debit - credit), 0) AS balance',FALSE)
+            ->from('view_invoices')
+            ->where('accountid', $accountid)
+            ->where('to_date <', $current_from)
+            ->get()
+            ->first_row();
+
+        $previous_balance = $prev_row ? (float) $prev_row->balance : 0.0;
+
+        // ---- Step 2: payments_received (this invoice) ----
+        $payments_row = $this->db
+            ->select('COALESCE(SUM(credit - debit), 0) AS total',FALSE)
+            ->from('invoice_details')
+            ->where('invoiceid', $invoiceid)
+            ->where_in('charge_type', ['INVPAY', 'REFILL'])
+            ->get()
+            ->first_row();
+
+        $payments_received = $payments_row ? (float) $payments_row->total : 0.0;
+
+        // ---- Step 3: session_charges (calls) ----
+        $calls_row = $this->db
+            ->select('COALESCE(SUM(debit), 0) AS total',FALSE)
+            ->from('invoice_details')
+            ->where('invoiceid', $invoiceid)
+            ->where('order_item_id', 0)
+            ->where_in('charge_type', ['STANDARD', 'DID', 'LOCAL', 'CALLINGCARD'])
+            ->get()
+            ->first_row();
+
+        $session_charges = $calls_row ? (float) $calls_row->total : 0.0;
+
+        // ---- Step 4: subscription_charges (products/services) ----
+        $subs_row = $this->db
+            ->select('COALESCE(SUM(debit), 0) AS total',FALSE)
+            ->from('invoice_details')
+            ->where('invoiceid', $invoiceid)
+            ->where('order_item_id >', 0)
+            ->where('is_tax', 0)
+            ->where('product_category !=', 3)
+            ->get()
+            ->first_row();
+
+        $subscription_charges = $subs_row ? (float) $subs_row->total : 0.0;
+
+        // ---- Step 5: credits_refunds (POSTCHARGE etc) ----
+        $credits_row = $this->db
+            ->select('COALESCE(SUM(debit), 0) AS total',FALSE)
+            ->from('invoice_details')
+            ->where('invoiceid', $invoiceid)
+            ->where_in('charge_type', ['POSTCHARGE']) // adjust if needed
+            ->get()
+            ->first_row();
+
+        $credits_refunds = $credits_row ? (float) $credits_row->total : 0.0;
+
+        // ---- Step 6: totals ----
+        $invoice_total = $credits_refunds
+            + $subscription_charges
+            + $session_charges;
+
+        $new_balance = $previous_balance
+            - $payments_received
+            + $invoice_total;
+
+        return [
+            'previous_balance' => $previous_balance,
+            'payments_received' => $payments_received,
+            'credits_refunds' => $credits_refunds,
+            'subscription_charges' => $subscription_charges,
+            'session_charges' => $session_charges,
+            'invoice_total' => $invoice_total,
+            'new_balance' => $new_balance,
+            'amount_due' => $new_balance,
+        ];
+    }
+
+    private function _get_invoice_cdrs($invoiceid)
+    {
+        $this->db->select('sip_user, callednum, callstart, billseconds, debit, calltype');
+        $this->db->from('cdrs');
+        $this->db->where('invoiceid', $invoiceid);
+        // optional: only show billable calls
+        $this->db->where('billseconds >', 0);
+        $this->db->order_by('callstart', 'ASC');
+
+        $query = $this->db->get();
+        return $query->result_array();
+    }
+
+    function invoice_download($invoiceid)
     {
         if ($invoiceid != '' && isset($invoiceid)) {
 
@@ -226,27 +333,37 @@ class Invoices extends MX_Controller
             ));
             $invoicedata = $query->first_row();
             $data['invoicenumber'] = $invoicedata->number;
-	    $posttoexternal = $this->common->get_field_name("posttoexternal","accounts",array("id"=>$invoicedata->accountid));
-	    if($posttoexternal == 0 && $invoicedata->credit > 0 && $invoicedata->credit !=''  ){
-			$data['all_total_count'] = ($invoicedata->credit );
-	    }else{
-            		$data['all_total_count'] = ($invoicedata->debit);
-	    }
 
-	  
-	   $data['this_month_recharges'] =$this->common->currency_decimal(0);
-	   if($posttoexternal == 0 && $invoicedata->credit != "" && $invoicedata->credit > 0 ){
-		        $data['this_month_recharges'] = ($invoicedata->credit - $invoicedata->debit) ; 
-	   }
-		
-	   if($posttoexternal == 1 && $invoicedata->credit != "" && $invoicedata->credit > 0 ){
-			$data['this_month_recharges'] = $invoicedata->credit; 
-	   }
-	
-	    $data['posttoexternal'] = $posttoexternal;
+            $summary = $this->_get_invoice_summary($invoiceid);
+            if ($summary) {
+                $data = array_merge($data, $summary);
+            }
+            
+            $data['from_date'] = date('j M y', strtotime($invoicedata->from_date)); 
+            $data['to_date']   = date('j M y', strtotime($invoicedata->to_date));  
+
+            $data['cdr_data'] = $this->_get_invoice_cdrs($invoiceid);
+
+            $posttoexternal = $this->common->get_field_name("posttoexternal", "accounts", array("id" => $invoicedata->accountid));
+            if ($posttoexternal == 0 && $invoicedata->credit > 0 && $invoicedata->credit != '') {
+                $data['all_total_count'] = ($invoicedata->credit);
+            } else {
+                $data['all_total_count'] = ($invoicedata->debit);
+            }
+
+            $data['this_month_recharges'] = $this->common->currency_decimal(0);
+            if ($posttoexternal == 0 && $invoicedata->credit != "" && $invoicedata->credit > 0) {
+                $data['this_month_recharges'] = ($invoicedata->credit - $invoicedata->debit);
+            }
+
+            if ($posttoexternal == 1 && $invoicedata->credit != "" && $invoicedata->credit > 0) {
+                $data['this_month_recharges'] = $invoicedata->credit;
+            }
+
+            $data['posttoexternal'] = $posttoexternal;
             $total_calls_amount = "select sum(debit) as debit from invoice_details where charge_type IN('STANDARD','DID','LOCAL','CALLINGCARD') AND  order_item_id = 0 AND  invoiceid ='" . $invoiceid . "'  ";
             $total_calls_amount = (array) $this->db->query($total_calls_amount)->first_row();
-            if (! empty($total_calls_amount)) {
+            if (!empty($total_calls_amount)) {
                 $data['total_calls_amount'] = (float) $total_calls_amount['debit'];
             } else {
                 $data['total_calls_amount'] = '0.0000';
@@ -261,6 +378,8 @@ class Invoices extends MX_Controller
             } else {
                 $data['product_service_total'] = '0.0000';
             }
+
+
             $login_info = $this->session->userdata('accountinfo');
             $data["currency"] = $this->common->get_field_name('currency', 'currency', $login_info["currency_id"]);
 
@@ -335,53 +454,52 @@ class Invoices extends MX_Controller
                 ));
                 $company_data = $query->first_row();
 
-		$logo = explode (".",$company_data->logo);
-		if((!isset($logo[2])) && ($logo[1] == "png")){
-			$sourceFile = FCPATH.'upload/'.$company_data->logo;
-			$DestFile = FCPATH.'upload/'.$logo[0].'.jpg';
-			$filePath = FCPATH.'upload/';
-			$convert_png  = "convert ".$sourceFile." -background white -flatten ".$DestFile;
-			$convert_png_file = system($convert_png, $retval);
-			$company_data->logo = $logo[0].'.jpg';
-		}
+                $logo = explode(".", $company_data->logo);
+                if ((!isset($logo[2])) && ($logo[1] == "png")) {
+                    $sourceFile = FCPATH . 'upload/' . $company_data->logo;
+                    $DestFile = FCPATH . 'upload/' . $logo[0] . '.jpg';
+                    $filePath = FCPATH . 'upload/';
+                    $convert_png = "convert " . $sourceFile . " -background white -flatten " . $DestFile;
+                    $convert_png_file = system($convert_png, $retval);
+                    $company_data->logo = $logo[0] . '.jpg';
+                }
 
                 $data['cmp_name'] = $company_data->company_name;
                 $data['cmp_address'] = $company_data->address;
                 $data['cmp_city_zipcode'] = $company_data->city . ' - ' . $company_data->zipcode;
                 //astppcom-972 start
-                $country = $this->common->get_field_name('nicename','countrycode', $company_data->country);
+                $country = $this->common->get_field_name('nicename', 'countrycode', $company_data->country);
                 $data['cmp_province_country'] = $company_data->province . ' , ' . $country;
                 //astppcom-972 end
                 $data['cmp_telephone'] = $company_data->telephone;
                 $data['cmp_tax'] = $company_data->invoice_taxes_number;
                 $data['cmp_invoice_note'] = $company_data->invoice_note;
-                $data['invoice_date'] = $invoicedata->generate_date;
-                $data['invoice_due_date'] = $invoicedata->due_date;
+
+                $data['invoice_date'] =  date('j M y', strtotime($invoicedata->generate_date));
+                $data['invoice_due_date'] = date('j M y', strtotime($invoicedata->due_date));
+
                 $data['account_number'] = $accountsdata->number;
                 $data['invoice_notes'] = $accountsdata->invoice_note;
-                $data['logo'] = (! empty($company_data->logo)) ? $company_data->logo : 'logo.jpg';
-		
-		$debit_data = $this->common->currency_decimal(0);
-		$debit_data = $this->common->get_field_name("debit","view_invoices",array("id"=>$invoiceid));
-		$data['debit_data'] = $debit_data;
-		
-		if($posttoexternal == 1){
-		        $query = $this->db->get_where('invoice_details', array(
-		            'invoiceid' => $invoiceid,
-		            'is_tax' => '0',
-			    'charge_type <>' =>'INVPAY',
-			    'charge_type <>' =>'REFILL'
-			
-		        ));
-		
-		}else{
-			$query = $this->db->get_where('invoice_details', array(
-		            'invoiceid' => $invoiceid,
-		            'is_tax' => '0',
-			    'charge_type <>' =>'INVPAY'
-		        ));
+                $data['logo'] = (!empty($company_data->logo)) ? $company_data->logo : 'logo.jpg';
 
-		}
+                $debit_data = $this->common->currency_decimal(0);
+                $debit_data = $this->common->get_field_name("debit", "view_invoices", array("id" => $invoiceid));
+                $data['debit_data'] = $debit_data;
+
+                if ($posttoexternal == 1) {
+                    $query = $this->db->get_where('invoice_details', array(
+                        'invoiceid' => $invoiceid,
+                        'is_tax' => '0',
+                        'charge_type <>' => 'INVPAY',
+                    ));
+                } else {
+                    $query = $this->db->get_where('invoice_details', array(
+                        'invoiceid' => $invoiceid,
+                        'is_tax' => '0',
+                        'charge_type <>' => 'INVPAY'
+                    ));
+
+                }
                 $invoice_details_data = $query->result_array();
 
                 $query = $this->db->get_where('invoice_details', array(
@@ -404,10 +522,232 @@ class Invoices extends MX_Controller
             $content = $this->load->view('view_invoice_template', $data, 'TRUE');
             $this->html2pdf->pdf->SetDisplayMode('fullpage');
             $this->html2pdf->writeHTML($content);
-            $this->html2pdf->Output($data['invoicenumber'].'.pdf', "D");
+            $this->html2pdf->Output($data['invoicenumber'] . '.pdf', "D");
             exit();
         }
     }
+    
+
+    // function invoice_download($invoiceid)
+    // {
+    //     if ($invoiceid != '' && isset($invoiceid)) {
+
+    //         $query = $this->db->get_where('view_invoices', array(
+    //             'id' => $invoiceid
+    //         ));
+    //         $invoicedata = $query->first_row();
+    //         $data['invoicenumber'] = $invoicedata->number;
+	//     $posttoexternal = $this->common->get_field_name("posttoexternal","accounts",array("id"=>$invoicedata->accountid));
+	//     if($posttoexternal == 0 && $invoicedata->credit > 0 && $invoicedata->credit !=''  ){
+	// 		$data['all_total_count'] = ($invoicedata->credit );
+	//     }else{
+    //         		$data['all_total_count'] = ($invoicedata->debit);
+	//     }
+
+	  
+	//    $data['this_month_recharges'] =$this->common->currency_decimal(0);
+	//    if($posttoexternal == 0 && $invoicedata->credit != "" && $invoicedata->credit > 0 ){
+	// 	        $data['this_month_recharges'] = ($invoicedata->credit - $invoicedata->debit) ; 
+	//    }
+		
+	//    if($posttoexternal == 1 && $invoicedata->credit != "" && $invoicedata->credit > 0 ){
+	// 		$data['this_month_recharges'] = $invoicedata->credit; 
+	//    }
+	
+	//     $data['posttoexternal'] = $posttoexternal;
+    //         $total_calls_amount = "select sum(debit) as debit from invoice_details where charge_type IN('STANDARD','DID','LOCAL','CALLINGCARD') AND  order_item_id = 0 AND  invoiceid ='" . $invoiceid . "'  ";
+    //         $total_calls_amount = (array) $this->db->query($total_calls_amount)->first_row();
+    //         if (! empty($total_calls_amount)) {
+    //             $data['total_calls_amount'] = (float) $total_calls_amount['debit'];
+    //         } else {
+    //             $data['total_calls_amount'] = '0.0000';
+    //         }
+
+    //         $product_services = "select sum(debit) from invoice_details where  order_item_id > 0 AND is_tax = 0 AND product_category !=3 AND invoiceid ='" . $invoiceid . "' ";
+    //         $product_services = (array) $this->db->query($product_services)->first_row();
+    //         $product_services = $product_services['sum(debit)'];
+
+    //         if ($product_services != "") {
+    //             $data['product_service_total'] = $this->common->currency_decimal($product_services);
+    //         } else {
+    //             $data['product_service_total'] = '0.0000';
+    //         }
+    //         // ===== NEW SUMMARY FIELDS (TEMP DUMMY VALUES) =====
+
+    //         // For now, keep previous balance, payments, credits as 0
+    //         // We will hook them to real data later.
+    //         $data['previous_balance']     = 0;
+    //         $data['payments_received']    = 0;
+    //         $data['credits_refunds']      = 0;
+
+    //         // Use existing numbers for charges
+    //         $data['subscription_charges'] = ($product_services != "") ? (float)$product_services : 0;
+    //         $data['session_charges']      = isset($data['total_calls_amount']) ? (float)$data['total_calls_amount'] : 0;
+
+    //         // Compute invoice total / new balance / amount due
+    //         $data['invoice_total'] = $data['credits_refunds']
+    //                    + $data['subscription_charges']
+    //                    + $data['session_charges'];
+
+    //         $data['new_balance'] = $data['previous_balance']
+    //                  - $data['payments_received']
+    //                  + $data['invoice_total'];
+
+    //         $data['amount_due'] = $data['new_balance'];
+    //         // ===== END NEW SUMMARY FIELDS =====
+
+
+    //         $login_info = $this->session->userdata('accountinfo');
+    //         $data["currency"] = $this->common->get_field_name('currency', 'currency', $login_info["currency_id"]);
+
+    //         if ($invoicedata->accountid != '' && isset($invoicedata->accountid)) {
+
+    //             $query = $this->db->get_where('accounts', array(
+    //                 'id' => $invoicedata->accountid
+    //             ));
+    //             $accountsdata = $query->first_row();
+
+    //             if ($accountsdata->company_name == '') {
+    //                 $data['fullname'] = $accountsdata->first_name . ' ' . $accountsdata->last_name;
+    //             } else {
+    //                 $data['fullname'] = ucfirst($accountsdata->company_name);
+    //             }
+
+    //             $data['address_1'] = $accountsdata->address_1;
+    //             $data['address_2'] = $accountsdata->address_2;
+
+    //             if ($accountsdata->city != '' && $accountsdata->postal_code != '') {
+    //                 $data['city_postalcode'] = $accountsdata->city . ' - ' . $accountsdata->postal_code;
+    //             }
+    //             if ($accountsdata->city == '' && $accountsdata->postal_code != '') {
+    //                 $data['city_postalcode'] = $accountsdata->postal_code;
+    //             }
+    //             if ($accountsdata->city != '' && $accountsdata->postal_code == '') {
+    //                 $data['city_postalcode'] = $accountsdata->city;
+    //             }
+
+    //             if ($accountsdata->country_id != '0') {
+    //                 $this->db->select('country');
+    //                 $this->db->from('countrycode');
+    //                 $this->db->where('id', $accountsdata->country_id);
+    //                 $query = $this->db->get();
+    //                 $country_name = $query->first_row();
+
+    //                 if ($accountsdata->province != '' && $country_name->country != '') {
+    //                     $data['province_country'] = $accountsdata->province . ' , ' . $country_name->country;
+    //                 }
+    //                 if ($accountsdata->province == '' && $country_name->country != '') {
+    //                     $data['province_country'] = $country_name->country;
+    //                 }
+    //                 if ($accountsdata->province != '' && $country_name->country == '') {
+    //                     $data['province_country'] = $accountsdata->province;
+    //                 }
+    //             } else {
+    //                 if ($accountsdata->province != '') {
+    //                     $data['province_country'] = $accountsdata->province;
+    //                 } else {
+    //                     $data['province_country'] = '';
+    //                 }
+    //             }
+
+    //             if ($accountsdata->tax_number != '') {
+    //                 $data['tax_number'] = $accountsdata->tax_number;
+    //             }
+
+    //             if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == "on") {
+    //                 $domain = "https://" . $_SERVER["HTTP_HOST"] . "/";
+    //             } else {
+    //                 $domain = "http://" . $_SERVER["HTTP_HOST"] . "/";
+    //             }
+    //             $http_host = $_SERVER["HTTP_HOST"];
+    //             $this->db->select('accountid');
+    //             $this->db->where("domain LIKE '%$domain%'");
+    //             $this->db->or_where("domain LIKE '%$http_host%'");
+    //             $invoice_details = (array) $this->db->get_where("invoice_conf")->first_row();
+    //             $accountid_invoice = ((!empty($invoice_details)) && ($invoice_details['accountid'] != '')) ? $invoice_details['accountid'] : 1;
+
+    //             $query = $this->db->get_where('invoice_conf', array(
+    //                 'accountid' => $accountid_invoice
+    //             ));
+    //             $company_data = $query->first_row();
+
+	// 	$logo = explode (".",$company_data->logo);
+	// 	if((!isset($logo[2])) && ($logo[1] == "png")){
+	// 		$sourceFile = FCPATH.'upload/'.$company_data->logo;
+	// 		$DestFile = FCPATH.'upload/'.$logo[0].'.jpg';
+	// 		$filePath = FCPATH.'upload/';
+	// 		$convert_png  = "convert ".$sourceFile." -background white -flatten ".$DestFile;
+	// 		$convert_png_file = system($convert_png, $retval);
+	// 		$company_data->logo = $logo[0].'.jpg';
+	// 	}
+
+    //             $data['cmp_name'] = $company_data->company_name;
+    //             $data['cmp_address'] = $company_data->address;
+    //             $data['cmp_city_zipcode'] = $company_data->city . ' - ' . $company_data->zipcode;
+    //             //astppcom-972 start
+    //             $country = $this->common->get_field_name('nicename','countrycode', $company_data->country);
+    //             $data['cmp_province_country'] = $company_data->province . ' , ' . $country;
+    //             //astppcom-972 end
+    //             $data['cmp_telephone'] = $company_data->telephone;
+    //             $data['cmp_tax'] = $company_data->invoice_taxes_number;
+    //             $data['cmp_invoice_note'] = $company_data->invoice_note;
+    //             $data['invoice_date'] = $invoicedata->generate_date;
+    //             $data['invoice_due_date'] = $invoicedata->due_date;
+    //             $data['account_number'] = $accountsdata->number;
+    //             $data['invoice_notes'] = $accountsdata->invoice_note;
+    //             $data['logo'] = (! empty($company_data->logo)) ? $company_data->logo : 'logo.jpg';
+		
+	// 	$debit_data = $this->common->currency_decimal(0);
+	// 	$debit_data = $this->common->get_field_name("debit","view_invoices",array("id"=>$invoiceid));
+	// 	$data['debit_data'] = $debit_data;
+		
+	// 	if($posttoexternal == 1){
+	// 	        $query = $this->db->get_where('invoice_details', array(
+	// 	            'invoiceid' => $invoiceid,
+	// 	            'is_tax' => '0',
+	// 		    'charge_type <>' =>'INVPAY',
+	// 		    'charge_type <>' =>'REFILL'
+			
+	// 	        ));
+		
+	// 	}else{
+	// 		$query = $this->db->get_where('invoice_details', array(
+	// 	            'invoiceid' => $invoiceid,
+	// 	            'is_tax' => '0',
+	// 		    'charge_type <>' =>'INVPAY'
+	// 	        ));
+
+	// 	}
+    //             $invoice_details_data = $query->result_array();
+
+    //             $query = $this->db->get_where('invoice_details', array(
+    //                 'invoiceid' => $invoiceid,
+    //                 'is_tax' => '1'
+    //             ));
+    //             $invoicetax_details_data = $query->result_array();
+
+    //             $data['invoicetax_details_data'] = $invoicetax_details_data;
+    //             $data['invoice_details_data'] = $invoice_details_data;
+    //         }
+            
+    //         ob_start();
+    //         $this->load->library('/html2pdf/html2pdf');
+    //         $this->html2pdf = new HTML2PDF('P', 'A4', 'en');
+    //         $this->html2pdf->pdf->SetDisplayMode('fullpage');
+    //         $content = ob_get_clean();
+    //         ob_clean();
+
+    //         $content = $this->load->view('view_invoice_template', $data, 'TRUE');
+    //         $this->html2pdf->pdf->SetDisplayMode('fullpage');
+    //         $this->html2pdf->writeHTML($content);
+    //         $this->html2pdf->Output($data['invoicenumber'].'.pdf', "D");
+    //         exit();
+            
+    //         // $content = $this->load->view('view_invoice_template', $data, TRUE);
+    //         // echo $content;
+    //         // exit();
+    //     }
+    // }
     function invoice_list_search()
     {
         $ajax_search = $this->input->post('ajax_search', 0);

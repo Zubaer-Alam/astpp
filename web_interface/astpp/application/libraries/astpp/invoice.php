@@ -152,14 +152,14 @@ class invoice {
 		$total_amt=$product_info['price'];
 
 
-		if( $account_info ['posttoexternal'] == 0){
-			$invoice_id = $this->generate_invoice ($account_info,$total_amt,$payment_id);
+		//if( $account_info ['posttoexternal'] == 0){
+		//	$invoice_id = $this->generate_invoice ($account_info,$total_amt,$payment_id);
 
-		}else{
+		//}else{
 			// ASTPPCOM-1112_kinjal_start
-			$invoice_id = '0';
+		$invoice_id = '0';
 			// ASTPPCOM-1112_kinjal_end
-		}
+		//}
 		
 		if($product_info['invoice_type'] == 'credit'){
 			$debit = "0.00";
