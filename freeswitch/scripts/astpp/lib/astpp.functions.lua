@@ -191,6 +191,7 @@ function doauthorization(field_type,accountcode,call_direction,destination_numbe
     	balance = get_balance(userinfo,'',config);
     	if (balance < 0) then
     	    Logger.warning("[DOAUTHORIZATION] ["..accountcode.."] Insufficent balance ("..balance..") to make calls..!!");
+    	    Logger.debug("[DOAUTHORIZATION] Balance negative, will check for packages/grace time later");
     	    userinfo['ACCOUNT_ERROR'] = 'NO_SUFFICIENT_FUND'
     	else
     	    if (call_direction == 'outbound') then     
@@ -403,11 +404,21 @@ function get_call_maxlength(userinfo,destination_number,call_direction,number_lo
 	balance = get_balance(userinfo,'',config)
 	      Logger.info("[FIND_MAXLENGTH] Your"..balance.." balance Accountid "..userinfo['id'].." !!!")
 	if (balance < (rates['connectcost'] + rates['cost']) and tonumber(package_id) == 0) then
-	      Logger.info("[FIND_MAXLENGTH] Your balance is not sufficent to dial "..destination_number.." !!!")
-	      return 'NO_SUFFICIENT_FUND'
+		if (rates['includedseconds'] == nil or tonumber(rates['includedseconds']) <= 0) then
+			Logger.info("[FIND_MAXLENGTH] Your balance is not sufficent to dial "..destination_number.." !!!")
+			return 'NO_SUFFICIENT_FUND'
+		else
+			Logger.info("[FIND_MAXLENGTH] Grace time available: "..rates['includedseconds'].." seconds, allowing call despite low balance")
+		end
 	end
 	if (tonumber(rates['cost']) > 0 ) then
 	      maxlength = ( balance -  rates['connectcost'] ) / rates['cost']
+	      -- ADD: Include grace time (includedseconds) in maxlength
+	      if (rates['includedseconds'] ~= nil and tonumber(rates['includedseconds']) > 0) then
+		      local grace_minutes = tonumber(rates['includedseconds']) / 60
+		      maxlength = maxlength + grace_minutes
+		      Logger.info("[FIND_MAXLENGTH] Added "..grace_minutes.." minutes grace time, new maxlength: "..maxlength)
+	      end
 	      if ( config['call_max_length'] and (tonumber(maxlength) > tonumber(config['call_max_length']))) then
 			  maxlength = config['call_max_length']		      
 		      Logger.notice("[FIND_MAXLENGTH] Limiting call to config max length "..maxlength.." mins!")
@@ -485,10 +496,12 @@ function package_calculation (destination_number,userinfo,call_direction)
 	local i = 1  
 	local query = "SELECT *,P.id as package_id,P.product_id as product_id FROM ".. TBL_PACKAGE.." as P inner join "..TBL_PACKAGE_PATTERN.." as PKGPTR on P.product_id = PKGPTR.product_id WHERE ".. custom_destination.." AND accountid = ".. package_act_id .. " ORDER BY LENGTH(PKGPTR.patterns) DESC";
 	Logger.debug("[GET_PACKAGE_INFO] Query :" .. query)
+	Logger.debug("[GET_PACKAGE_INFO] Destination number: " .. destination_number .. ", Account ID: " .. package_act_id)
 	assert (dbh:query(query, function(u)
 		package_info_arr[i] = u
 	    	i = i+1
-		end))  
+		end))
+	Logger.debug("[GET_PACKAGE_INFO] Found " .. (i-1) .. " matching package(s)")  
 
 	if(package_info_arr and package_info_arr ~= nil) then
 		for package_info_key,package_info in pairs(package_info_arr) do
@@ -506,6 +519,7 @@ function package_calculation (destination_number,userinfo,call_direction)
 				end			
 				remaining_minutes = (tonumber(package_info['free_minutes']*60) - tonumber(used_seconds))/60
 				Logger.info("Remaining minutes : "..remaining_minutes)
+				Logger.debug("[GET_PACKAGE_INFO] Package "..package_info['package_id']..": free_minutes="..package_info['free_minutes']..", used_seconds="..used_seconds..", remaining_minutes="..remaining_minutes)
 				if(remaining_minutes > 0) then
 					if (tonumber(balance) <= 0) then
 						userinfo['balance'] = 100
@@ -518,10 +532,14 @@ function package_calculation (destination_number,userinfo,call_direction)
 					package_maxlength = remaining_minutes;	
 					package_id = package_info['package_id']
 					Logger.notice("package_id : "..package_id)
+					Logger.info("[GET_PACKAGE_INFO] Package applied successfully: package_id="..package_id..", package_maxlength="..package_maxlength.." minutes")
 					break
 				end
 			end 
 		end
+	end
+	if (package_maxlength == nil) then
+		Logger.debug("[GET_PACKAGE_INFO] No matching package found or no remaining minutes available")
 	end
 	tmp[1]	= userinfo
 	tmp[2] = package_maxlength

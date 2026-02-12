@@ -462,6 +462,12 @@ function get_q850code($dataVariable, $db) {
 // Calculate cost for billing
 function calc_cost($dataVariable, $rates, $logger, $decimal_points) {
 	// $logger->log(print_r($rates,true));
+	
+	// If calltype is FREE (package free minutes), return 0 cost
+	if (isset($dataVariable['calltype']) && $dataVariable['calltype'] == "FREE") {
+		$logger->log("Call is FREE (package), returning 0 cost");
+		return 0;
+	}
 	$duration = (int) isset($dataVariable['billsec'])?$dataVariable ['billsec']:0;
 
 	// If the call was less than 1 second), or we don't have any rates, it didn't cost anything

@@ -191,6 +191,11 @@ if(userinfo ~= nil) then
 	end
     -- Get package information of customer	
 	package_array = package_calculation (destination_number,userinfo,call_direction)
+	
+	-- Update userinfo FIRST before checking errors (package may have cleared the error)
+	userinfo = package_array[1]
+	package_maxlength = package_array[2] or ""	
+    -------------------------------------------------
 
 	if(userinfo['ACCOUNT_ERROR'] == 'NO_SUFFICIENT_FUND') then
 		error_xml_without_cdr(destination_number,"NO_SUFFICIENT_FUND",calltype,config['playback_audio_notification'],userinfo['id'])
@@ -209,20 +214,7 @@ if(userinfo ~= nil) then
     end
 
 	-- Code for Prefix based routing to select rate group
-	original_destination_number = destination_number	
-
-
-    -- Get package information of customer	
--- Due to balance issue set this line before check balance	package_array = package_calculation (destination_number,userinfo,call_direction)
-		
-	userinfo = package_array[1]
-	package_maxlength = package_array[2] or ""	
-    -------------------------------------------------
-
-	if(userinfo['ACCOUNT_ERROR'] == 'NO_SUFFICIENT_FUND') then
-		error_xml_without_cdr(destination_number,"NO_SUFFICIENT_FUND",calltype,config['playback_audio_notification'],userinfo['id'])
-		return 0
-	end
+	original_destination_number = destination_number
 
 	if(userinfo['local_call'] == '1' and call_direction == "local") then
         Logger.warning("[Functions] [DOAUTHORIZATION] ["..accountcode.."] LOCAL CALL IS DISABLE....!!");
