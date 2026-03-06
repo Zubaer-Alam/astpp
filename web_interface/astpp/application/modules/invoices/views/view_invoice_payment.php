@@ -164,7 +164,8 @@
                                        $paypal = 0;
                                        if (isset($invoice_detail_info) && ! empty($invoice_detail_info)) {
                                            foreach ($invoice_detail_info as $value) {
-                                               if ($value['charge_type'] != 'INVPAY' && $value['charge_type'] != 'REFILL' || $value['charge_type'] != 'REFILL' && $value['charge_type'] != 'COMMISSION') {
+                                               $payment_types = array('INVPAY', 'REFILL', 'COMMISSION', 'Voucher');
+                                               if (!in_array($value['charge_type'], $payment_types)) {
                                                    $debit = $value['debit'];
                                                    $credit = $value['credit'];
                                                    $paypal += $credit;
@@ -205,7 +206,8 @@
                                        $paypal = 0;
                                        if (isset($invoice_detail_info) && ! empty($invoice_detail_info)) {
                                            foreach ($invoice_detail_info as $value) {
-                                               if ($value['charge_type'] == 'INVPAY' || $value['charge_type'] == 'REFILL' || $value['charge_type'] == 'REFILL' || $value['charge_type'] == 'COMMISSION') {
+                                               $payment_types = array('INVPAY', 'REFILL', 'COMMISSION', 'Voucher');
+                                               if (in_array($value['charge_type'], $payment_types)) {
                                                    $debit = $value['debit'];
                                                    $credit = $value['credit'];
                                                    $paypal += $credit;
@@ -216,7 +218,7 @@
                                                    ?>	
                                     <tr>
                                        <td> <?php echo date('Y-m-d', strtotime($created_date)) ?></td>
-                                       <td><?php echo $value['description']; ?>  <?php echo $paypalid; ?></td>
+                                       <td><?php echo $value['description']; ?><?php if (!empty($paypalid)) { echo ' ' . $paypalid; } ?></td>
                                        <td>
                                           <div class="pull-right"><?php echo $this->common->currency_decimal($this->common_model->calculate_currency($credit)); ?> <?php  echo $to_currency; ?></div>
                                        </td>

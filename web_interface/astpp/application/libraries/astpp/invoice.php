@@ -266,7 +266,6 @@ class invoice {
 		$this->CI->db->select('id, from_date');
 		$this->CI->db->from('invoices');
 		$this->CI->db->where('accountid', (int) $account_id);
-		$this->CI->db->where_in('status', array('1', '2'));
 		$this->CI->db->order_by('from_date', 'ASC');
 		$this->CI->db->order_by('id', 'ASC');
 		$invoices = $this->CI->db->get();
