@@ -284,17 +284,24 @@ class ProcessInvoice extends MX_Controller
 				"notes" => $accountinfo['invoice_note'],
 				"is_deleted" => 0
 			);
-			
+
 			$this->db->insert("invoices", $InvoiceData);
 			$invoiceid = $this->db->insert_id();
 
 			$update_billable_item = "update invoice_details set invoiceid = " . $invoiceid . " where accountid=" . $accountinfo['id'] . " AND created_date >='" . $this->StartDate . "' AND created_date <= '" . $this->EndDate . "' AND invoiceid = 0";
 			$this->db->query($update_billable_item);
-			$amount = $this->db_model->getSelect("debit,credit", "invoice_details", array("invoiceid" => $invoiceid));
-			if ($amount->num_rows > 0) {
-				$amount = $amount->result_array()[0];
-				$InvoiceData['amount'] = ($amount['credit'] - $amount['debit']);
-				$InvoiceData['amount'] = ($InvoiceData['amount'] < 0) ? ($InvoiceData['amount'] * -1) : $InvoiceData['amount'];
+			$amount_sql = "SELECT COALESCE(SUM(debit), 0) AS total_debit, COALESCE(SUM(credit), 0) AS total_credit FROM invoice_details WHERE invoiceid = " . $invoiceid;
+			$amount_row = $this->db->query($amount_sql)->row_array();
+			if (!empty($amount_row)) {
+				$InvoiceData['debit'] = $amount_row['total_debit'];
+				$InvoiceData['credit'] = $amount_row['total_credit'];
+				$InvoiceData['amount'] = abs($amount_row['total_credit'] - $amount_row['total_debit']);
+				$this->db->where('id', $invoiceid);
+				$this->db->update('invoices', array(
+					'debit' => $InvoiceData['debit'],
+					'credit' => $InvoiceData['credit'],
+					'amount' => $InvoiceData['amount']
+				));
 				$InvoiceData['invoice_number'] = $invoiceconf['invoice_prefix'] . $last_invoice_ID;
 				$final_array = array_merge($accountinfo, $InvoiceData);
 				$this->common->mail_to_users("new_invoice", $final_array);

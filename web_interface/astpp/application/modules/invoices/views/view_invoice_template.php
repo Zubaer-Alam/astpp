@@ -200,7 +200,7 @@
 						</tr>
 						<tr>
 							<td class="col-md-6"><b><?php echo gettext('Invoice Due Date'); ?> </b></td>
-							<td class="col-md-6 text-right"><?php echo htmlspecialchars($invoice_date); ?></td>
+							<td class="col-md-6 text-right"><?php echo htmlspecialchars($invoice_due_date); ?></td>
 
 						</tr>
 						<tr>
@@ -249,7 +249,7 @@
 						</td>
 					</tr>
 					<tr>
-						<td class="col-md-6"><?php echo gettext('Credits / Refunds'); ?></td>
+						<td class="col-md-6"><?php echo gettext('Postcharges / Refunds'); ?></td>
 						<td class="col-md-6 text-right">
 							<?php echo $this->common_model->calculate_currency($this->common->currency_decimal($credits_refunds), '', '', true, false); ?>
 						</td>
@@ -264,6 +264,12 @@
 						<td class="col-md-6"><?php echo gettext('Session Charges (Calls)'); ?></td>
 						<td class="col-md-6 text-right">
 							<?php echo $this->common_model->calculate_currency($this->common->currency_decimal($session_charges), '', '', true, false); ?>
+						</td>
+					</tr>
+					<tr>
+						<td class="col-md-6"><?php echo gettext('Funds Transferred'); ?></td>
+						<td class="col-md-6 text-right">
+							<?php echo $this->common_model->calculate_currency($this->common->currency_decimal($transfer_debits), '', '', true, false); ?>
 						</td>
 					</tr>
 					<tr class="bg_gray">

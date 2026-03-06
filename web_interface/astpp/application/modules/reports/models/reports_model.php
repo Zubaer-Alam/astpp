@@ -246,7 +246,8 @@ class Reports_model extends CI_Model
                 $where_date['date <='] = date('Y-m-d 23:59:59');
             }
         }
-        $where = "(invoice_details.charge_type= 'Voucher' OR invoice_details.charge_type='REFILL')";
+        // $where = "(invoice_details.charge_type= 'Voucher' OR invoice_details.charge_type='REFILL')";
+        $where = "invoice_details.charge_type IN ('Voucher', 'REFILL', 'INVPAY', 'FUNDTRANSFER', 'POSTCHARGE', 'PACKAGE')";
         if (isset($where_date)) {
             $this->db->where($where_date);
         }
@@ -311,7 +312,8 @@ payment_transaction.transaction_id,invoice_details.charge_type,invoice_details.d
                 $where['date <='] = date('Y-m-d 23:59:59');
             }
         }
-        $where = "(invoice_details.charge_type= 'Voucher' OR invoice_details.charge_type='REFILL ')";
+        // $where = "(invoice_details.charge_type= 'Voucher' OR invoice_details.charge_type='REFILL')";
+        $where = "invoice_details.charge_type IN ('Voucher', 'REFILL', 'INVPAY', 'FUNDTRANSFER', 'POSTCHARGE', 'PACKAGE')";
         $this->db->where("payment_transaction.accountid", $accountid);
 
         if ($flag) {

@@ -237,6 +237,104 @@ class invoice {
 		return $invoice_id;
 	}
 
+	/**
+	 * Allocate credit to unpaid invoices (FIFO). Inserts INVPAY rows and updates invoice status.
+	 * Does NOT update account balance. Returns the amount that was not allocated (for invoiceid=0).
+	 *
+	 * @param int $account_id
+	 * @param float $amount Total credit to allocate
+	 * @param int $payment_id payment_transaction.id
+	 * @param array $payment_info
+	 * @param array $account_info
+	 * @param mixed $tax_calculation
+	 * @param array $currency_info
+	 * @return float Remaining amount (0 to $amount)
+	 */
+	public function allocate_credit_to_invoices($account_id, $amount, $payment_id, $payment_info, $account_info, $tax_calculation, $currency_info)
+	{
+		$amount = (float) $amount;
+		if ($amount < 0.01) {
+			return $amount;
+		}
+
+		$remaining = $amount;
+		$base_currency = Common_model::$global_config['system_config']['base_currency'];
+		$bal = $this->CI->common->get_field_name("balance", "accounts", array("id" => $account_id));
+		$running_balance = $account_info['posttoexternal'] == 1 ? ($account_info['credit_limit'] - $bal) : $bal;
+		$running_balance = (float) str_replace(',', '.', $running_balance);
+
+		$this->CI->db->select('id, from_date');
+		$this->CI->db->from('invoices');
+		$this->CI->db->where('accountid', (int) $account_id);
+		$this->CI->db->where_in('status', array('1', '2'));
+		$this->CI->db->order_by('from_date', 'ASC');
+		$this->CI->db->order_by('id', 'ASC');
+		$invoices = $this->CI->db->get();
+
+		if ($invoices->num_rows() == 0) {
+			return $remaining;
+		}
+
+		$payment_by = isset($payment_info['payment_by']) ? $payment_info['payment_by'] : 'Manual';
+		$description = "Payment received from " . $payment_by . " (allocated to invoice)";
+
+		foreach ($invoices->result_array() as $inv) {
+			if ($remaining < 0.01) {
+				break;
+			}
+
+			$invoice_id = (int) $inv['id'];
+			$outstanding_sql = "SELECT (COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0)) AS outstanding FROM invoice_details WHERE invoiceid = " . $invoice_id;
+			$out_row = $this->CI->db->query($outstanding_sql)->row_array();
+			$outstanding = (float) $out_row['outstanding'];
+
+			if ($outstanding < 0.01) {
+				continue;
+			}
+
+			$apply = min($remaining, round($outstanding, 2));
+			if ($apply < 0.01) {
+				continue;
+			}
+			$apply = round($apply, 2);
+
+			$before_balance = $running_balance;
+			$after_balance = $running_balance + $apply;
+			$after_balance = str_replace(',', '.', (string) $after_balance);
+			$running_balance = (float) $after_balance;
+
+			$insert_arr = array(
+				"accountid" => $account_info['id'],
+				"description" => $description,
+				"created_date" => gmdate("Y-m-d H:i:s"),
+				"invoiceid" => $invoice_id,
+				"reseller_id" => $account_info['reseller_id'],
+				"is_tax" => 0,
+				"order_item_id" => isset($payment_info['order_item_id']) ? $payment_info['order_item_id'] : 0,
+				"payment_id" => $payment_id,
+				'before_balance' => $before_balance,
+				'product_category' => isset($payment_info['product_category']) ? $payment_info['product_category'] : 0,
+				'charge_type' => 'INVPAY',
+				'after_balance' => $after_balance,
+				'base_currency' => $base_currency,
+				'exchange_rate' => isset($currency_info['currencyrate']) ? $currency_info['currencyrate'] : 0,
+				'account_currency' => isset($currency_info['currency']) ? $currency_info['currency'] : 0,
+				'debit' => '0.00',
+				'credit' => $apply
+			);
+			$this->CI->db->insert("invoice_details", $insert_arr);
+
+			$new_outstanding = $outstanding - $apply;
+			$inv_status = ($new_outstanding < 0.01) ? '0' : '2';
+			$this->CI->db->where('id', $invoice_id);
+			$this->CI->db->update('invoices', array('status' => $inv_status));
+
+			$remaining -= $apply;
+		}
+
+		return round($remaining, 2);
+	}
+
 	function update_balance($amount, $accountid, $payment_type,$invoice_type) {
 		if($invoice_type == 'credit'){
 			  $query = "update accounts set balance =  IF(posttoexternal=1,balance-" . $amount . ",balance+" . $amount . ") where id ='" . $accountid . "'"; 

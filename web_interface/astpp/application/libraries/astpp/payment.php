@@ -83,7 +83,20 @@ class payment {
 			$payment_info['invoice_type'] = "credit";
 			$invoiceid = $this->CI->invoice->receive_payment($payment_info,$account_info,$tax_calculation,$last_payment_id,$currency_info,$payment_info['invoiceid']);
 		}else{
-			$invoiceid = $this->CI->invoice->add_invoice_details($payment_info,$account_info,$tax_calculation,$last_payment_id,$currency_info);
+			if (isset($payment_info['invoice_type']) && $payment_info['invoice_type'] == 'credit') {
+				$remaining = $this->CI->invoice->allocate_credit_to_invoices($account_info['id'], $total_amt, $last_payment_id, $payment_info, $account_info, $tax_calculation, $currency_info);
+				if ($remaining > 0) {
+					$payment_info['price'] = $remaining;
+					$invoiceid = $this->CI->invoice->add_invoice_details($payment_info, $account_info, $tax_calculation, $last_payment_id, $currency_info);
+				} else {
+					$invoiceid = 0;
+				}
+				if ($remaining < $total_amt) {
+					$this->CI->invoice->update_balance($total_amt - $remaining, $account_info['id'], $account_info['posttoexternal'], 'credit');
+				}
+			} else {
+				$invoiceid = $this->CI->invoice->add_invoice_details($payment_info, $account_info, $tax_calculation, $last_payment_id, $currency_info);
+			}
 		}
 
 		return $invoiceid;
