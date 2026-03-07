@@ -1096,7 +1096,7 @@ $payment_last_date = $this->common->get_field_name("created_date", "invoice_deta
 $payment_last = ($payment_last_date) ? date("Y-m-d", strtotime($payment_last_date)) : '';
 $download = '<a href="' . base_url() . '/user/user_invoice_download/' . $value['id'] . '" class="btn btn-royelblue btn-sm"  title="Download Invoice" ><i class="fa fa-cloud-download fa-fw"></i></a>&nbsp';
 if ($accountinfo['posttoexternal'] == 0) {
-    $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("DO NOT PAY").'</button>';
+    $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("Don't Pay").'</button>';
 } elseif (isset($value['status']) && $value['status'] == '2') {
     $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("PARTIAL").'</a>';
 } elseif ($value['is_paid'] == 1 && $outstanding > 0) {
