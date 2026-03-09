@@ -233,14 +233,23 @@ class Invoices extends MX_Controller
     }
 
     /**
-     * Get cumulative outstanding for this invoice using period-filtered amounts.
-     * Matches invoice PDF (New Balance / Amount Due).
+     * Get cumulative outstanding for this invoice (running balance).
+     * Sums (debit - credit) for all invoice_details on all invoices for this account
+     * up to and including this invoice (by to_date). No period filter - reflects
+     * actual current balance per accounting conventions.
      */
     public function _get_invoice_cumulative_outstanding($accountid, $invoiceid, $from_date, $to_date)
     {
-        $prev = $this->_get_invoice_previous_balance($accountid, $from_date);
-        $current_net = $this->_get_invoice_period_net($invoiceid, $to_date);
-        return $prev + $current_net;
+        $row = $this->db
+            ->select('COALESCE(SUM(id.debit - id.credit), 0) AS balance', FALSE)
+            ->from('invoice_details id')
+            ->join('invoices inv', 'inv.id = id.invoiceid')
+            ->where('inv.accountid', (int) $accountid)
+            ->where('inv.to_date <=', $to_date)
+            ->where('inv.is_deleted', 0)
+            ->get()
+            ->first_row();
+        return $row ? (float) $row->balance : 0.0;
     }
 
     private function _get_invoice_summary($invoiceid)
