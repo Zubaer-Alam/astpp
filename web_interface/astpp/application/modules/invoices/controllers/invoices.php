@@ -103,7 +103,7 @@ class Invoices extends MX_Controller
 
                 $accountinfo = $this->session->userdata('accountinfo');
                 $id = $accountinfo['id'];
-                $true_outstanding = $this->_get_invoice_cumulative_outstanding($value['accountid'], $value['from_date'], $value['debit'], $value['credit']);
+                $true_outstanding = $this->_get_invoice_cumulative_outstanding($value['accountid'], $value['id'], $value['from_date'], $value['to_date']);
                 $outstanding = $true_outstanding;
 
                 $download = "<a  href=" . $url . $value['id'] . " class='btn btn-royelblue btn-sm'  title='Download Invoice' ><i class='fa fa-cloud-download fa-fw'></i></a>&nbsp";
@@ -200,29 +200,47 @@ class Invoices extends MX_Controller
     }
 
     /**
-     * Get previous balance (sum of debit-credit for all invoices of account with to_date < from_date).
-     * Excludes deleted invoices.
+     * Get previous balance: sum of (debit - credit) for older invoices, using only
+     * invoice_details with created_date <= each invoice's to_date (period filter).
+     * Matches invoice PDF logic. Excludes deleted invoices.
      */
     public function _get_invoice_previous_balance($accountid, $from_date)
     {
-        $prev_row = $this->db
-            ->select('COALESCE(SUM(debit - credit), 0) AS balance', FALSE)
-            ->from('view_invoices')
-            ->where('accountid', (int) $accountid)
-            ->where('to_date <', $from_date)
-            ->where('is_deleted', 0)
-            ->get()
-            ->first_row();
+        $this->db->select('COALESCE(SUM(id.debit - id.credit), 0) AS balance', FALSE);
+        $this->db->from('invoices inv');
+        $this->db->join('invoice_details id', 'id.invoiceid = inv.id AND id.created_date <= inv.to_date');
+        $this->db->where('inv.accountid', (int) $accountid);
+        $this->db->where('inv.to_date <', $from_date);
+        $this->db->where('inv.is_deleted', 0);
+        $prev_row = $this->db->get()->first_row();
         return $prev_row ? (float) $prev_row->balance : 0.0;
     }
 
     /**
-     * Get cumulative outstanding: previous_balance + (debit - credit) for this invoice.
+     * Get period-filtered net (debit - credit) for one invoice.
+     * Only includes invoice_details with created_date <= to_date.
      */
-    public function _get_invoice_cumulative_outstanding($accountid, $from_date, $debit, $credit)
+    public function _get_invoice_period_net($invoiceid, $to_date)
+    {
+        $row = $this->db
+            ->select('COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS net', FALSE)
+            ->from('invoice_details')
+            ->where('invoiceid', (int) $invoiceid)
+            ->where('created_date <=', $to_date)
+            ->get()
+            ->first_row();
+        return $row ? (float) $row->net : 0.0;
+    }
+
+    /**
+     * Get cumulative outstanding for this invoice using period-filtered amounts.
+     * Matches invoice PDF (New Balance / Amount Due).
+     */
+    public function _get_invoice_cumulative_outstanding($accountid, $invoiceid, $from_date, $to_date)
     {
         $prev = $this->_get_invoice_previous_balance($accountid, $from_date);
-        return $prev + ((float) $debit - (float) $credit);
+        $current_net = $this->_get_invoice_period_net($invoiceid, $to_date);
+        return $prev + $current_net;
     }
 
     private function _get_invoice_summary($invoiceid)
@@ -2083,7 +2101,7 @@ class Invoices extends MX_Controller
                 $from_date = date("Y-m-d", $fromdate);
                 $duedate = strtotime($value['due_date']);
                 $due_date = date("Y-m-d", $duedate);
-                $outstanding = $this->_get_invoice_cumulative_outstanding($accountid, $value['from_date'], $value['debit'], $value['credit']);
+                $outstanding = $this->_get_invoice_cumulative_outstanding($accountid, $value['id'], $value['from_date'], $value['to_date']);
                 $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
                 $from_currency = Common_model::$global_config['system_config']['base_currency'];
                 $to_currency = $this->common->get_field_name('currency', 'currency', $accountinfo['currency_id']);

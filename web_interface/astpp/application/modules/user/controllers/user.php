@@ -1065,7 +1065,7 @@ function user_invoices_list_json()
         $invoice_date = $this->common->convert_GMT_to_new('','',$value['generate_date']);
         $from_date = $this->common->convert_GMT_to_new('','',$value['from_date']);
         $due_date = $this->common->convert_GMT_to_new('','',$value['due_date']);
-        $outstanding = $this->invoices->_get_invoice_cumulative_outstanding($accountid, $value['from_date'], $value['debit'], $value['credit']);
+        $outstanding = $this->invoices->_get_invoice_cumulative_outstanding($accountid, $value['id'], $value['from_date'], $value['to_date']);
         $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
         $from_currency = Common_model::$global_config['system_config']['base_currency'];
         $to_currency = $this->common->get_field_name('currency', 'currency', $accountinfo['currency_id']);
