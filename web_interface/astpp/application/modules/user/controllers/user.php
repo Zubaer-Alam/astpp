@@ -1041,9 +1041,11 @@ function user_invoices_list()
 
 function user_invoices_list_json()
 {
+    $this->load->module('invoices/invoices');
     $accountinfo = $this->session->userdata('accountinfo');
+    $accountid = $accountinfo['id'];
     $where = array(
-        "accountid" => $accountinfo['id']
+        "accountid" => $accountid
     );
     $count_all = $this->user_model->get_user_invoice_list(false, '', '', $where);
     $paging_data = $this->form->load_grid_config($count_all, $_GET['rp'], $_GET['page']);
@@ -1053,7 +1055,7 @@ function user_invoices_list_json()
     $invoices_result = $invoices_query->result_array();
     $ountstanding_value = 0;
     $total_amount = 0;
-    $this->db->where('accountid', $accountinfo['id']);
+    $this->db->where('accountid', $accountid);
     $this->db->select('*');
     $invoice_details_result = $this->db->get('invoice_details');
     $total_credit = (array) $invoice_details_result->first_row();
@@ -1063,31 +1065,14 @@ function user_invoices_list_json()
         $invoice_date = $this->common->convert_GMT_to_new('','',$value['generate_date']);
         $from_date = $this->common->convert_GMT_to_new('','',$value['from_date']);
         $due_date = $this->common->convert_GMT_to_new('','',$value['due_date']);
+        $outstanding = $this->invoices->_get_invoice_cumulative_outstanding($accountid, $value['from_date'], $value['debit'], $value['credit']);
+        $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
         $from_currency = Common_model::$global_config['system_config']['base_currency'];
         $to_currency = $this->common->get_field_name('currency', 'currency', $accountinfo['currency_id']);
-        $charge_type = $this->common->get_field_name("charge_type","invoice_details",array("invoiceid"=>$value['id'])); 
-        
         if ($from_currency != $to_currency) {
-            $outstanding = ($value['is_paid'] == 1) ? $value['debit'] - $value['credit'] : 0.00;
             $outstanding = $this->common_model->calculate_currency($outstanding, "", "", true, false);
-
-            if($charge_type == "REFILL" || $charge_type == "Voucher" || $charge_type == "COMMISSION"){
-
-              $amount =  $value['credit'];
-              $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
-          }else{
-             $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
-             $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
-         }
-     } else {
-        $outstanding = ($value['is_paid'] == 1) ? $value['debit'] - $value['credit'] : 0.00;
-
-        if($charge_type == "REFILL" || $charge_type == "Voucher" || $charge_type == "COMMISSION"){
-         $amount =  $value['credit'];
-     }else{
-       $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
-   }
-}
+            $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
+        }
 
 $payment_last_date = '';
 $payment_last_date = $this->common->get_field_name("created_date", "invoice_details", array(
@@ -1099,7 +1084,7 @@ if ($accountinfo['posttoexternal'] == 0) {
     $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("N/A").'</button>';
 } elseif (isset($value['status']) && $value['status'] == '2') {
     $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("PARTIAL").'</a>';
-} elseif ($value['is_paid'] == 1 && $outstanding > 0) {
+} elseif ($outstanding > 0.01) {
     $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("Unpaid").'</a>';
 } else {
     $payment = ' <button style="padding: 0 8px;" class="btn btn-success" type="button">'.gettext("Paid").'</button>';

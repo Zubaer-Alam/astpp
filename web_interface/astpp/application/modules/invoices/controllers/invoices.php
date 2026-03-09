@@ -101,13 +101,10 @@ class Invoices extends MX_Controller
                 $due_date = $this->common->convert_GMT_to_new('', '', $value['due_date']);
                 $to_date = $this->common->convert_GMT_to_new('', '', $from_date);
 
-                $outstanding = ($value['is_paid'] == 1) ? $value['debit'] - $value['credit'] : "0.00";
-                $invoice_total = '';
                 $accountinfo = $this->session->userdata('accountinfo');
                 $id = $accountinfo['id'];
-                $charge_type = $this->common->get_field_name("charge_type", "invoice_details", array(
-                    "invoiceid" => $value['id']
-                ));
+                $true_outstanding = $this->_get_invoice_cumulative_outstanding($value['accountid'], $value['from_date'], $value['debit'], $value['credit']);
+                $outstanding = $true_outstanding;
 
                 $download = "<a  href=" . $url . $value['id'] . " class='btn btn-royelblue btn-sm'  title='Download Invoice' ><i class='fa fa-cloud-download fa-fw'></i></a>&nbsp";
                 if ($value['type'] == 'I') {
@@ -125,7 +122,7 @@ class Invoices extends MX_Controller
                             $payment = "<button style='padding: 0 17px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
                         } elseif ($value['status'] == '2') {
                             $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
-                        } elseif ($value['is_paid'] == 1 && $outstanding > 0) {
+                        } elseif ($true_outstanding > 0.01) {
                             $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
                         } else {
                             $payment = "<button style='padding: 0 17px;' type='button'  class='btn btn-success'>" . gettext("Paid") . "</button>";
@@ -171,33 +168,10 @@ class Invoices extends MX_Controller
                 }
                 $from_currency = Common_model::$global_config['system_config']['base_currency'];
                 $to_currency = $this->common->get_field_name('currency', 'currency', $accountinfo['currency_id']);
+                $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
                 if ($from_currency != $to_currency) {
-                    if ($value['debit']  >  $value['credit']) {
-                        $outstanding = ($value['is_paid'] == 1) ? $value['debit'] - $value['credit'] : 0.00;
-                    } else {
-                        $outstanding = ($value['is_paid'] == 1) ? $value['credit'] - $value['debit'] : 0.00;
-                    }
                     $outstanding = $this->common_model->calculate_currency($outstanding, "", "", true, false);
-                    if ($charge_type == "REFILL" || $charge_type == "Voucher" || $charge_type == "COMMISSION") {
-                        $amount = $value['credit'];
-                        $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
-                    } else {
-                        $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
-                        $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
-                    }
-                } else {
-
-
-                    if ($value['debit']  >  $value['credit']) {
-                        $outstanding = ($value['is_paid'] == 1) ? $value['debit'] - $value['credit'] : 0.00;
-                    } else {
-                        $outstanding = ($value['is_paid'] == 1) ? $value['credit'] - $value['debit'] : 0.00;
-                    }
-                    if ($charge_type == "REFILL" || $charge_type == "Voucher" || $charge_type == "COMMISSION") {
-                        $amount = $value['credit'];
-                    } else {
-                        $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
-                    }
+                    $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
                 }
 
                 $json_data['rows'][] = array(
@@ -223,6 +197,32 @@ class Invoices extends MX_Controller
         }
 
         echo json_encode($json_data);
+    }
+
+    /**
+     * Get previous balance (sum of debit-credit for all invoices of account with to_date < from_date).
+     * Excludes deleted invoices.
+     */
+    public function _get_invoice_previous_balance($accountid, $from_date)
+    {
+        $prev_row = $this->db
+            ->select('COALESCE(SUM(debit - credit), 0) AS balance', FALSE)
+            ->from('view_invoices')
+            ->where('accountid', (int) $accountid)
+            ->where('to_date <', $from_date)
+            ->where('is_deleted', 0)
+            ->get()
+            ->first_row();
+        return $prev_row ? (float) $prev_row->balance : 0.0;
+    }
+
+    /**
+     * Get cumulative outstanding: previous_balance + (debit - credit) for this invoice.
+     */
+    public function _get_invoice_cumulative_outstanding($accountid, $from_date, $debit, $credit)
+    {
+        $prev = $this->_get_invoice_previous_balance($accountid, $from_date);
+        return $prev + ((float) $debit - (float) $credit);
     }
 
     private function _get_invoice_summary($invoiceid)
@@ -2083,16 +2083,13 @@ class Invoices extends MX_Controller
                 $from_date = date("Y-m-d", $fromdate);
                 $duedate = strtotime($value['due_date']);
                 $due_date = date("Y-m-d", $duedate);
+                $outstanding = $this->_get_invoice_cumulative_outstanding($accountid, $value['from_date'], $value['debit'], $value['credit']);
+                $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
                 $from_currency = Common_model::$global_config['system_config']['base_currency'];
                 $to_currency = $this->common->get_field_name('currency', 'currency', $accountinfo['currency_id']);
                 if ($from_currency != $to_currency) {
-                    $outstanding = ($value['is_paid'] == 1) ? $value['debit_exchange_rate'] - $value['credit_exchange_rate'] : 0.00;
-
-                    $amount = ($value['debit_exchange_rate'] > 0) ? $value['debit_exchange_rate'] : $value['credit_exchange_rate'];
-                } else {
-                    $outstanding = ($value['is_paid'] == 1) ? $value['debit'] - $value['credit'] : 0.00;
-
-                    $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
+                    $outstanding = $this->common_model->calculate_currency($outstanding, "", "", true, false);
+                    $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
                 }
                 $last_payment_date = '';
 
