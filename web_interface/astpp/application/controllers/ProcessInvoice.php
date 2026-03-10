@@ -321,9 +321,6 @@ class ProcessInvoice extends MX_Controller
 
 				$this->db->where('id', $invoiceid);
 				$this->db->update('invoices', array(
-					'debit' => $InvoiceData['debit'],
-					'credit' => $InvoiceData['credit'],
-					'amount' => $InvoiceData['amount'],
 					'status' => $invoice_status
 				));
 				$InvoiceData['invoice_number'] = $invoiceconf['invoice_prefix'] . $last_invoice_ID;
