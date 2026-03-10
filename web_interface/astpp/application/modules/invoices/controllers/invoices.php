@@ -168,7 +168,7 @@ class Invoices extends MX_Controller
                 }
                 $from_currency = Common_model::$global_config['system_config']['base_currency'];
                 $to_currency = $this->common->get_field_name('currency', 'currency', $accountinfo['currency_id']);
-                $amount = ($value['debit'] > 0) ? $value['debit'] : $value['credit'];
+                $amount = (float) ($value['debit'] ?? 0);
                 if ($from_currency != $to_currency) {
                     $outstanding = $this->common_model->calculate_currency($outstanding, "", "", true, false);
                     $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
