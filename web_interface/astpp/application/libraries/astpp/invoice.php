@@ -335,7 +335,8 @@ class invoice {
 			$this->CI->db->insert("invoice_details", $insert_arr);
 
 			$new_invoice_outstanding = $invoice_net - $apply;
-			$inv_status = ($new_invoice_outstanding < 0.01) ? '0' : '2';
+			$cleared_cumulative = ($apply >= round($new_cumulative, 2) - 0.01);
+			$inv_status = ($new_invoice_outstanding < 0.01 || $cleared_cumulative) ? '0' : '2';
 			$this->CI->db->where('id', $invoice_id);
 			$this->CI->db->update('invoices', array('status' => $inv_status));
 

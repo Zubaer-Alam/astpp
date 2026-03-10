@@ -540,7 +540,7 @@ class Invoices extends MX_Controller
 
                 $this->db->where('invoiceid', $invoiceid);
                 $this->db->where('is_tax', '0');
-                $this->db->where('charge_type !=', 'INVPAY');
+                $this->db->where_not_in('charge_type', ['INVPAY', 'REFILL', 'Voucher']);
                 $this->db->where('created_date <=', $invoicedata->to_date);
                 $invoice_details_data = $this->db->get('invoice_details')->result_array();
 
