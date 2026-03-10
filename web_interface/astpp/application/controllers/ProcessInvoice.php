@@ -298,20 +298,26 @@ class ProcessInvoice extends MX_Controller
 				$InvoiceData['amount'] = abs($amount_row['total_credit'] - $amount_row['total_debit']);
 
 				// Compute cumulative outstanding: previous_balance + (this invoice debit - credit)
-				$prev_sql = "SELECT COALESCE(SUM(id.debit - id.credit), 0) AS prev_balance
-					FROM invoices i
-					JOIN invoice_details id ON i.id = id.invoiceid
-					WHERE i.accountid = " . (int)$accountinfo['id'] . "
-					AND i.to_date < '" . $this->db->escape_str($this->StartDate) . "'
-					AND i.is_deleted = 0";
+				// Use created_date so allocations made in a later period to older invoices
+				// are excluded (same logic as _get_invoice_previous_balance in invoices module).
+				$prev_sql = "SELECT COALESCE(SUM(debit - credit), 0) AS prev_balance
+					FROM invoice_details
+					WHERE accountid = " . (int)$accountinfo['id'] . "
+					AND created_date < '" . $this->db->escape_str($this->StartDate) . "'";
 				$prev_row = $this->db->query($prev_sql)->row_array();
 				$previous_balance = $prev_row ? (float)$prev_row['prev_balance'] : 0.0;
 				$total_debit = (float)$amount_row['total_debit'];
 				$total_credit = (float)$amount_row['total_credit'];
 				$true_outstanding = $previous_balance + ($total_debit - $total_credit);
 
-				// status: 0=Paid, 1=Unpaid, 2=Partially paid
-				$invoice_status = ($true_outstanding <= 0 || abs($true_outstanding) < 0.01) ? 0 : 1;
+				// status: 0=Paid, 1=Unpaid, 2=Partially paid (prior credit reduced amount due)
+				if ($true_outstanding <= 0 || abs($true_outstanding) < 0.01) {
+					$invoice_status = 0;  // Paid
+				} elseif ($total_debit > 0.01 && $true_outstanding > 0.01 && $true_outstanding < $total_debit) {
+					$invoice_status = 2;  // Partial
+				} else {
+					$invoice_status = 1;  // Unpaid
+				}
 
 				$this->db->where('id', $invoiceid);
 				$this->db->update('invoices', array(
