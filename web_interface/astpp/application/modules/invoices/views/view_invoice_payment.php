@@ -160,6 +160,12 @@
                                           </div>
                                        </th>
                                     </tr>
+                                    <?php if (isset($previous_balance) && $previous_balance > 0.01): ?>
+                                    <tr style="height: 20px;">
+                                       <td><?php echo gettext('Balance Brought Forward'); ?></td>
+                                       <td><div class="pull-right"><?php echo $this->common->currency_decimal($this->common_model->calculate_currency($previous_balance)); ?> <?php echo $to_currency; ?></div></td>
+                                    </tr>
+                                    <?php endif; ?>
                                     <?php
                                        $paypal = 0;
                                        if (isset($invoice_detail_info) && ! empty($invoice_detail_info)) {
@@ -202,6 +208,13 @@
                                           <div class="pull-right"><?php echo gettext('Amount')?></div>
                                        </th>
                                     </tr>
+                                    <?php if (isset($previous_balance) && $previous_balance < -0.01): ?>
+                                    <tr>
+                                       <td>—</td>
+                                       <td><?php echo gettext('Balance Brought Forward'); ?></td>
+                                       <td><div class="pull-right"><?php echo $this->common->currency_decimal($this->common_model->calculate_currency(-$previous_balance)); ?> <?php echo $to_currency; ?></div></td>
+                                    </tr>
+                                    <?php endif; ?>
                                     <?php
                                        $paypal = 0;
                                        if (isset($invoice_detail_info) && ! empty($invoice_detail_info)) {
@@ -242,14 +255,18 @@
                                  </table>
                                  <table width="100%" border="0" colspan="2"
                                     class="invoice_table4 mb-0">
+                                    <?php
+                                       $outstanding_display = isset($true_outstanding) ? $true_outstanding : ($invoice_info['debit'] - $invoice_info['credit']);
+                                       $amount_to_pay = ($outstanding_display > 0.01) ? $outstanding_display : 0;
+                                    ?>
                                     <tr style="">
                                        <td><b><?php echo gettext('Outstanding Amount')?> :</b></td>
-                                       <td><span class="pull-right" style="color: #3278b6"><b><?php if (($invoice_info['debit'] - $invoice_info['credit']) >  0) { echo  $this->common->currency_decimal($this->common_model->calculate_currency(($invoice_info['debit'] - $invoice_info['credit']))); ?> <?php  echo $to_currency; } else {  echo "0.0000"; ?> <?php  echo $to_currency; } ?></b>
+                                       <td><span class="pull-right" style="color: #3278b6"><b><?php if ($outstanding_display > 0.01) { echo $this->common->currency_decimal($this->common_model->calculate_currency($outstanding_display)); ?> <?php echo $to_currency; } else { echo "0.0000"; ?> <?php echo $to_currency; } ?></b>
                                           </span>
                                        </td>
                                        <input type="hidden" name="total_amount" id="total_amount"
                                           class="article"
-                                          value="<?php echo  $this->common->currency_decimal($amount); ?>">
+                                          value="<?php echo $this->common->currency_decimal($amount); ?>">
                                     </tr>
                                  </table>
                               </div>
@@ -335,7 +352,7 @@
                                                       <div class="col-md-12 form-group p-0">
                                                          <label class="control-label"><?php echo gettext('Please Insert Amount')?> : </label>
                                                          <input type="text" name="amount"
-                                                            value="<?php echo $this->common->currency_decimal($this->common_model->calculate_currency(($invoice_info['debit'] - $invoice_info['credit']))); ?>"
+                                                            value="<?php echo $this->common->currency_decimal($this->common_model->calculate_currency($amount_to_pay)); ?>"
                                                             id="amount"
                                                             class="col-md-12 form-control form-control-lg" />
                                                       </div>
@@ -421,10 +438,11 @@
                      value="<?=$notify_url?>"> <input type="hidden" readonly
                      name="return" value="<?=$response_url?>"> <input type="hidden"
                      readonly name="cancel_return" value="<?=$cancel_return?>"> <input
-                     type="hidden" readonly name="custom" id='custom'
+                     type="hidden" readonly                      name="custom" id='custom'
                      value="<?php echo $accountdata['id']; ?>"> <input type="hidden"
                      name="new_amount" id="new_amount" readonly
-                     value="<?php echo $amount; ?>">
+                     value="<?php echo $amount; ?>"> <input type="hidden"
+                     id="outstanding_max" value="<?php echo isset($amount_to_pay) ? $this->common->currency_decimal($amount_to_pay) : $this->common->currency_decimal($invoice_info['debit'] - $invoice_info['credit']); ?>">
                   </form>
                   </div>
                </div>
@@ -447,7 +465,7 @@
      var description =document.getElementById('description').value;
      var new_amount=parseFloat(document.getElementById('new_amount').value);
         var total_amount =parseFloat(document.getElementById('amount').value);
-	var panding_amount = "<?php echo $invoice_info['debit'] - $invoice_info['credit'] ?>";
+	var panding_amount = parseFloat(document.getElementById('outstanding_max') ? document.getElementById('outstanding_max').value : "<?php echo isset($outstanding_display) ? $outstanding_display : ($invoice_info['debit'] - $invoice_info['credit']); ?>");
      if(text == '' || text <= '0'){
     	 document.getElementById('une').innerHTML = "Please enter amount greater than 0";
     	 payment_form.amount.focus();
@@ -488,8 +506,8 @@
         var text =document.getElementById('amount').value;
         var amount =document.getElementById('new_amount').value;
         var description =document.getElementById('description').value;
-        var new_amount= parseFloat(amount);
-        var paypal='<?php echo $paypal; ?>';
+        var outstandingEl = document.getElementById('outstanding_max');
+        var max_payable = outstandingEl ? parseFloat(outstandingEl.value) : parseFloat(amount);
         var total_amount =  parseFloat(text);
          if(text == '' || text <= '0'){
         document.getElementById('une').innerHTML = "Please Enter Amount greater than zero.";
@@ -507,7 +525,7 @@
         return(false);
         }
    
-       else if(new_amount >= total_amount && total_amount >0){
+       else if(max_payable >= total_amount && total_amount >0){
             $(".search_generate_bar").attr('disabled','disabled');
    	$('#admin_form').attr('action', "<?php echo base_url();?>invoices/invoice_admin_payment/");
            admin_form.submit();

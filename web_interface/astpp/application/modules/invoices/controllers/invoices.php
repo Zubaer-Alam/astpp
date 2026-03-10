@@ -1419,6 +1419,16 @@ class Invoices extends MX_Controller
                 $accountdata = $accountdata[0];
                 $data['accountdata'] = $accountdata;
             }
+            $data['previous_balance'] = $this->_get_invoice_previous_balance(
+                $invoice_info['accountid'],
+                $invoice_info['from_date']
+            );
+            $data['true_outstanding'] = $this->_get_invoice_cumulative_outstanding(
+                $invoice_info['accountid'],
+                $id,
+                $invoice_info['from_date'],
+                $invoice_info['to_date']
+            );
             $system_config = common_model::$global_config['system_config'];
             if ($system_config["paypal_mode"] == 0) {
                 $data["paypal_url"] = $system_config["paypal_url"];
