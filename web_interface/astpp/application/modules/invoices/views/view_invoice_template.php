@@ -381,10 +381,7 @@
 			// Payment line items (period-based: payments made in this billing period)
 			if (isset($payment_details_data) && !empty($payment_details_data)) {
 				foreach ($payment_details_data as $pay_data) {
-					$alloc_label = !empty($pay_data['allocated_to_invoice_number'])
-						? ' (' . gettext('Applied to') . ' ' . htmlspecialchars($pay_data['allocated_to_invoice_number']) . ')'
-						: '';
-					$pay_desc = (isset($pay_data['description']) ? $pay_data['description'] : $pay_data['charge_type']) . $alloc_label;
+					$pay_desc = isset($pay_data['description']) ? $pay_data['description'] : $pay_data['charge_type'];
 					?>
 				<tr style="width: 100%;">
 					<td style="width: 18%; border-bottom: 1px solid #f5f5f5;">

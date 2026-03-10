@@ -550,15 +550,14 @@ class Invoices extends MX_Controller
                 ));
                 $invoicetax_details_data = $query->result_array();
 
-                // Period-based payments: show payments made in this billing period (with "Applied to" label)
-                $this->db->select('id.*, v.number AS allocated_to_invoice_number');
-                $this->db->from('invoice_details id');
-                $this->db->join('view_invoices v', 'v.id = id.invoiceid', 'left');
-                $this->db->where('id.accountid', $invoicedata->accountid);
-                $this->db->where('id.created_date >=', $invoicedata->from_date);
-                $this->db->where('id.created_date <=', $invoicedata->to_date);
-                $this->db->where_in('id.charge_type', ['INVPAY', 'REFILL', 'Voucher']);
-                $this->db->order_by('id.created_date', 'ASC');
+                // Period-based payments: show payments made in this billing period
+                $this->db->select('*');
+                $this->db->from('invoice_details');
+                $this->db->where('accountid', $invoicedata->accountid);
+                $this->db->where('created_date >=', $invoicedata->from_date);
+                $this->db->where('created_date <=', $invoicedata->to_date);
+                $this->db->where_in('charge_type', ['INVPAY', 'REFILL', 'Voucher']);
+                $this->db->order_by('created_date', 'ASC');
                 $payment_details_data = $this->db->get()->result_array();
 
                 $data['invoicetax_details_data'] = $invoicetax_details_data;
