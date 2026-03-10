@@ -263,16 +263,8 @@ class Invoices extends MX_Controller
         $accountid = $inv->accountid;
         $current_from = $inv->from_date;
 
-        // ---- Step 1: previous_balance (all older invoices) ----
-        $prev_row = $this->db
-            ->select('COALESCE(SUM(debit - credit), 0) AS balance', FALSE)
-            ->from('view_invoices')
-            ->where('accountid', $accountid)
-            ->where('to_date <', $current_from)
-            ->get()
-            ->first_row();
-
-        $previous_balance = $prev_row ? (float) $prev_row->balance : 0.0;
+        // ---- Step 1: previous_balance (all older invoices, period-filtered) ----
+        $previous_balance = $this->_get_invoice_previous_balance($accountid, $current_from);
 
         // ---- Step 2: payments_received (period-based: payments made in this billing period) ----
         $payments_row = $this->db
