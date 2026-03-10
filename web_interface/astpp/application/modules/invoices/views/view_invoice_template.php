@@ -378,6 +378,35 @@
 				}
 
 			}
+			// Payment line items (period-based: payments made in this billing period)
+			if (isset($payment_details_data) && !empty($payment_details_data)) {
+				foreach ($payment_details_data as $pay_data) {
+					$alloc_label = !empty($pay_data['allocated_to_invoice_number'])
+						? ' (' . gettext('Applied to') . ' ' . htmlspecialchars($pay_data['allocated_to_invoice_number']) . ')'
+						: '';
+					$pay_desc = (isset($pay_data['description']) ? $pay_data['description'] : $pay_data['charge_type']) . $alloc_label;
+					?>
+				<tr style="width: 100%;">
+					<td style="width: 18%; border-bottom: 1px solid #f5f5f5;">
+						<?php
+						if (!empty($pay_data['created_date'])) {
+							echo date("d-m-Y H:i:s", strtotime($pay_data['created_date']));
+						} else {
+							echo '&nbsp;';
+						}
+						?>
+					</td>
+					<td style="width: 42%; border-bottom: 1px solid #f5f5f5;"><?php echo htmlspecialchars($pay_desc); ?></td>
+					<td style="width: 15%; border-bottom: 1px solid #f5f5f5;"><?php echo isset($pay_data['charge_type']) ? htmlspecialchars($pay_data['charge_type']) : ''; ?></td>
+					<td style="width: 12%; border-bottom: 1px solid #f5f5f5;" class="text-right">&nbsp;</td>
+					<td style="width: 13%; border-bottom: 1px solid #f5f5f5;" class="text-right">
+						<?php echo $this->common_model->calculate_currency($this->common->currency_decimal($pay_data['credit']), '', '', true, false); ?>
+					</td>
+				</tr>
+				<?php
+				$total_credit += (float) $pay_data['credit'];
+				}
+			}
 			?>
 		</table>
 

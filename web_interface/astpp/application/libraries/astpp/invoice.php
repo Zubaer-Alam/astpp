@@ -266,6 +266,7 @@ class invoice {
 		$this->CI->db->select('id, from_date');
 		$this->CI->db->from('invoices');
 		$this->CI->db->where('accountid', (int) $account_id);
+		$this->CI->db->where('is_deleted', 0);
 		$this->CI->db->order_by('from_date', 'ASC');
 		$this->CI->db->order_by('id', 'ASC');
 		$invoices = $this->CI->db->get();
@@ -277,6 +278,10 @@ class invoice {
 		$payment_by = isset($payment_info['payment_by']) ? $payment_info['payment_by'] : 'Manual';
 		$description = "Payment received from " . $payment_by . " (allocated to invoice)";
 
+		// Use cumulative balance: only allocate to invoices that have effective positive balance.
+		// Skip invoices already "covered" by prior account credit.
+		$running_cumulative = 0.0;
+
 		foreach ($invoices->result_array() as $inv) {
 			if ($remaining < 0.01) {
 				break;
@@ -285,17 +290,23 @@ class invoice {
 			$invoice_id = (int) $inv['id'];
 			$outstanding_sql = "SELECT (COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0)) AS outstanding FROM invoice_details WHERE invoiceid = " . $invoice_id;
 			$out_row = $this->CI->db->query($outstanding_sql)->row_array();
-			$outstanding = (float) $out_row['outstanding'];
+			$invoice_net = (float) $out_row['outstanding'];
 
-			if ($outstanding < 0.01) {
+			$new_cumulative = $running_cumulative + $invoice_net;
+
+			if ($new_cumulative <= 0) {
+				$running_cumulative = $new_cumulative;
 				continue;
 			}
 
-			$apply = min($remaining, round($outstanding, 2));
+			$apply = min($remaining, round($new_cumulative, 2));
 			if ($apply < 0.01) {
+				$running_cumulative = $new_cumulative;
 				continue;
 			}
 			$apply = round($apply, 2);
+
+			$running_cumulative = $new_cumulative - $apply;
 
 			$before_balance = $running_balance;
 			$after_balance = $running_balance + $apply;
@@ -323,8 +334,8 @@ class invoice {
 			);
 			$this->CI->db->insert("invoice_details", $insert_arr);
 
-			$new_outstanding = $outstanding - $apply;
-			$inv_status = ($new_outstanding < 0.01) ? '0' : '2';
+			$new_invoice_outstanding = $invoice_net - $apply;
+			$inv_status = ($new_invoice_outstanding < 0.01) ? '0' : '2';
 			$this->CI->db->where('id', $invoice_id);
 			$this->CI->db->update('invoices', array('status' => $inv_status));
 

@@ -274,11 +274,12 @@ class Invoices extends MX_Controller
 
         $previous_balance = $prev_row ? (float) $prev_row->balance : 0.0;
 
-        // ---- Step 2: payments_received (this invoice) ----
+        // ---- Step 2: payments_received (period-based: payments made in this billing period) ----
         $payments_row = $this->db
             ->select('COALESCE(SUM(credit - debit), 0) AS total', FALSE)
             ->from('invoice_details')
-            ->where('invoiceid', $invoiceid)
+            ->where('accountid', $accountid)
+            ->where('created_date >=', $inv->from_date)
             ->where('created_date <=', $inv->to_date)
             ->where_in('charge_type', ['INVPAY', 'REFILL', 'Voucher'])
             ->get()
@@ -549,8 +550,20 @@ class Invoices extends MX_Controller
                 ));
                 $invoicetax_details_data = $query->result_array();
 
+                // Period-based payments: show payments made in this billing period (with "Applied to" label)
+                $this->db->select('id.*, v.number AS allocated_to_invoice_number');
+                $this->db->from('invoice_details id');
+                $this->db->join('view_invoices v', 'v.id = id.invoiceid', 'left');
+                $this->db->where('id.accountid', $invoicedata->accountid);
+                $this->db->where('id.created_date >=', $invoicedata->from_date);
+                $this->db->where('id.created_date <=', $invoicedata->to_date);
+                $this->db->where_in('id.charge_type', ['INVPAY', 'REFILL', 'Voucher']);
+                $this->db->order_by('id.created_date', 'ASC');
+                $payment_details_data = $this->db->get()->result_array();
+
                 $data['invoicetax_details_data'] = $invoicetax_details_data;
                 $data['invoice_details_data'] = $invoice_details_data;
+                $data['payment_details_data'] = $payment_details_data;
             }
 
             ob_start();
