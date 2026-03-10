@@ -200,19 +200,19 @@ class Invoices extends MX_Controller
     }
 
     /**
-     * Get previous balance: sum of (debit - credit) for older invoices, using only
-     * invoice_details with created_date <= each invoice's to_date (period filter).
-     * Matches invoice PDF logic. Excludes deleted invoices.
+     * Get previous balance: cumulative (debit - credit) for all invoice_details
+     * with created_date before period start. Uses created_date only so allocations
+     * in a later period (e.g. July refill to May/June) are correctly included.
      */
     public function _get_invoice_previous_balance($accountid, $from_date)
     {
-        $this->db->select('COALESCE(SUM(id.debit - id.credit), 0) AS balance', FALSE);
-        $this->db->from('invoices inv');
-        $this->db->join('invoice_details id', 'id.invoiceid = inv.id AND id.created_date <= inv.to_date');
-        $this->db->where('inv.accountid', (int) $accountid);
-        $this->db->where('inv.to_date <', $from_date);
-        $this->db->where('inv.is_deleted', 0);
-        $prev_row = $this->db->get()->first_row();
+        $prev_row = $this->db
+            ->select('COALESCE(SUM(debit - credit), 0) AS balance', FALSE)
+            ->from('invoice_details')
+            ->where('accountid', (int) $accountid)
+            ->where('created_date <', $from_date)
+            ->get()
+            ->first_row();
         return $prev_row ? (float) $prev_row->balance : 0.0;
     }
 
