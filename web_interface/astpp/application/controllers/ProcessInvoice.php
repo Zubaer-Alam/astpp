@@ -103,6 +103,20 @@ class ProcessInvoice extends MX_Controller
 			return true;
 		}
 
+		// 3) Any activity in period (e.g. INVPAY/REFILL already allocated) so period gets an invoice/PDF
+		$activity_sql = "
+		SELECT COUNT(*) AS cnt
+		FROM invoice_details
+		WHERE accountid = {$accountId}
+		  AND created_date >= '{$startDate}'
+		  AND created_date <= '{$endDate}'
+		  AND is_tax = 0
+		";
+		$row = $this->db->query($activity_sql)->row_array();
+		if (!empty($row) && (int) $row['cnt'] > 0) {
+			return true;
+		}
+
 		return false;
 	}
 
