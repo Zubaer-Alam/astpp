@@ -1074,11 +1074,8 @@ function user_invoices_list_json()
             $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
         }
 
-$payment_last_date = '';
-$payment_last_date = $this->common->get_field_name("created_date", "invoice_details", array(
-    "invoiceid" => $value['id']
-));
-$payment_last = ($payment_last_date) ? date("Y-m-d", strtotime($payment_last_date)) : '';
+$to_date = $this->common->convert_GMT_to_new('', '', $value['to_date']);
+$to_date = $to_date ? date("Y-m-d", strtotime($to_date)) : '';
 $download = '<a href="' . base_url() . '/user/user_invoice_download/' . $value['id'] . '" class="btn btn-royelblue btn-sm"  title="Download Invoice" ><i class="fa fa-cloud-download fa-fw"></i></a>&nbsp';
 if ($accountinfo['posttoexternal'] == 0) {
     $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("N/A").'</button>';
@@ -1101,7 +1098,7 @@ $json_data['rows'][] = array(
         $invoice_date,
         $from_date,
         $due_date,
-        $payment_last,
+        $to_date,
         $this->common->currency_decimal($amount),
         $this->common->currency_decimal($outstanding),
         $download . $payment

@@ -2133,6 +2133,7 @@ class Invoices extends MX_Controller
                     $amount = $this->common_model->calculate_currency($amount, "", "", true, false);
                 }
                 $last_payment_date = '';
+                $payment_last = '';
 
                 $invoice_total_query = $this->db_model->select("sum(debit) as debit,sum(credit) as credit,created_date", "invoice_details", array(
                     "invoiceid" => $value['id']
@@ -2144,8 +2145,17 @@ class Invoices extends MX_Controller
                     if ($last_payment_date) {
                         $payment_date = strtotime($last_payment_date);
                         $payment_last = date("Y-m-d", $payment_date);
-                    } else {
-                        $payment_last = '';
+                    }
+                }
+                if ($payment_last === '' && isset($value['from_date']) && isset($value['to_date'])) {
+                    $pay_row = $this->db->select('created_date')->from('invoice_details')
+                        ->where('accountid', $accountid)
+                        ->where('created_date >=', $value['from_date'])
+                        ->where('created_date <=', $value['to_date'])
+                        ->where_in('charge_type', ['INVPAY', 'REFILL', 'Voucher'])
+                        ->order_by('created_date', 'DESC')->limit(1)->get()->row();
+                    if ($pay_row && $pay_row->created_date) {
+                        $payment_last = date("Y-m-d", strtotime($pay_row->created_date));
                     }
                 }
                 $invoice_total = '';
@@ -2248,6 +2258,7 @@ class Invoices extends MX_Controller
             $duedate = strtotime($value['due_date']);
             $due_date = date("d/m/Y", $duedate);
             $outstanding = $value['amount'];
+            $payment_last = '';
             $invoice_total_query = $this->db_model->select("sum(debit) as debit,sum(credit) as credit,created_date", "invoice_details", array(
                 "invoiceid" => $value['id']
             ), "created_date", "DESC", "1", "0");
@@ -2259,8 +2270,17 @@ class Invoices extends MX_Controller
                 if ($last_payment_date) {
                     $payment_date = strtotime($last_payment_date);
                     $payment_last = date("d/m/Y", $payment_date);
-                } else {
-                    $payment_last = '';
+                }
+            }
+            if ($payment_last === '' && isset($value['from_date']) && isset($value['to_date'])) {
+                $pay_row = $this->db->select('created_date')->from('invoice_details')
+                    ->where('accountid', $value['accountid'])
+                    ->where('created_date >=', $value['from_date'])
+                    ->where('created_date <=', $value['to_date'])
+                    ->where_in('charge_type', ['INVPAY', 'REFILL', 'Voucher'])
+                    ->order_by('created_date', 'DESC')->limit(1)->get()->row();
+                if ($pay_row && $pay_row->created_date) {
+                    $payment_last = date("d/m/Y", strtotime($pay_row->created_date));
                 }
             }
             $invoice_total_query = $this->db_model->select("debit,created_date", "invoice_details", array(
