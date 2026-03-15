@@ -169,7 +169,7 @@ $logger->log("*********************** Harsh_trunk in package_id: **".$dataVariab
 	$debit = calc_cost ( $dataVariable, $origination_rate [$accountid], $logger, $decimal_points );
 	
 	// Calculate cost for customer call for provider
-	$provider_cost = calc_cost ( $dataVariable, $termination_rate, $logger, $decimal_points );
+	$provider_cost = calc_cost ( $dataVariable, $termination_rate, $logger, $decimal_points, false );
 	
 	// Calculate parent cost if customer have any parent
 	$parent_cost = ($parentid > 0) ? calc_cost ( $dataVariable, $origination_rate [$parentid], $logger, $decimal_points ) : $provider_cost;
@@ -460,11 +460,11 @@ function get_q850code($dataVariable, $db) {
 
 
 // Calculate cost for billing
-function calc_cost($dataVariable, $rates, $logger, $decimal_points) {
+function calc_cost($dataVariable, $rates, $logger, $decimal_points, $apply_free_zero = true) {
 	// $logger->log(print_r($rates,true));
 	
-	// If calltype is FREE (package free minutes), return 0 cost
-	if (isset($dataVariable['calltype']) && $dataVariable['calltype'] == "FREE") {
+	// If calltype is FREE (package free minutes), return 0 cost (only for customer debit; vendor cost uses apply_free_zero=false)
+	if ($apply_free_zero && isset($dataVariable['calltype']) && $dataVariable['calltype'] == "FREE") {
 		$logger->log("Call is FREE (package), returning 0 cost");
 		return 0;
 	}
