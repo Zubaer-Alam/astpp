@@ -1080,7 +1080,7 @@ $download = '<a href="' . base_url() . '/user/user_invoice_download/' . $value['
 if ($accountinfo['posttoexternal'] == 0) {
     if (isset($value['status']) && $value['status'] == '2') {
         $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("PARTIAL").'</a>';
-    } elseif ($outstanding < -0.01) {
+    } elseif ($outstanding > 0.01) {
         $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("Unpaid").'</a>';
     } else {
         $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("N/A").'</button>';
