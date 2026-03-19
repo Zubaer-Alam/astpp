@@ -873,12 +873,14 @@ class Reports extends MX_Controller
             )) : $this->common->get_field_name("email", "accounts", array(
                 "id" => 1
             ));
+            // Use invoice_details credit/debit for split payments (e.g. INVPAY 0.6 + REFILL 0.4), not payment total
+            $display_amount = (isset($value['credit']) && $value['credit'] > 0) ? $value['credit'] : (isset($value['debit']) && $value['debit'] > 0 ? $value['debit'] : $value['amount']);
             if ($value['payment_method'] == "Paypal") {
                 $json_data['rows'][] = array(
                     'cell' => array(
                         $this->common->convert_GMT_to('', '', $value['date']),
                         $firstname,
-                        $this->common->convert_to_currency_account("", "", $value['amount']),
+                        $this->common->convert_to_currency_account("", "", $display_amount),
                         $value['payment_method'],
                         $value['transaction_id'],
                         $payer_email,
@@ -893,7 +895,7 @@ class Reports extends MX_Controller
                     'cell' => array(
                         $this->common->convert_GMT_to('', '', $value['date']),
                         $firstname,
-                        $this->common->convert_to_currency_account("", "", $value['amount']),
+                        $this->common->convert_to_currency_account("", "", $display_amount),
                         $value['payment_method'],
                         $value['transaction_id'],
                         $payeremail,
@@ -958,12 +960,14 @@ class Reports extends MX_Controller
                     "id" => 1
                 ));
                 $transaction_details = json_decode($row['transaction_details'], true);
+                // Use invoice_details credit/debit for split payments, not payment total
+                $display_amount = (isset($row['credit']) && $row['credit'] > 0) ? $row['credit'] : (isset($row['debit']) && $row['debit'] > 0 ? $row['debit'] : $row['amount']);
 
                 $customer_array[] = array(
                     $row['date'],
                     isset($account_arr[$row['accountid']]) ? $account_arr[$row['accountid']] : 'Anonymous',
 
-                    $this->common->convert_to_currency_account("", "", $row['amount']),
+                    $this->common->convert_to_currency_account("", "", $display_amount),
                     $row['payment_method'],
                     $row['transaction_id'],
                     $payeremail,
@@ -1053,12 +1057,14 @@ class Reports extends MX_Controller
         $result = $query->result_array();
         foreach ($result as $key => $value) {
             $transaction_details = json_decode($value['transaction_details'], true);
+            // Use invoice_details credit/debit for split payments, not payment total
+            $display_amount = (isset($value['credit']) && $value['credit'] > 0) ? $value['credit'] : (isset($value['debit']) && $value['debit'] > 0 ? $value['debit'] : $value['actual_amount']);
 
             if ($value['payment_method'] == "Paypal") {
                 $json_data['rows'][] = array(
                     'cell' => array(
                         $value['date'],
-                        $value['actual_amount'],
+                        $display_amount,
                         $value['payment_method'],
                         $transaction_details['description']
                     )
@@ -1067,7 +1073,7 @@ class Reports extends MX_Controller
                 $json_data['rows'][] = array(
                     'cell' => array(
                         $value['date'],
-                        $value['actual_amount'],
+                        $display_amount,
                         $value['payment_method'],
                         $value['description']
                     )
