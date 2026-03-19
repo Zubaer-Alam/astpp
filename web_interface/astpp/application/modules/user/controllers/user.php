@@ -1078,7 +1078,13 @@ $to_date = $this->common->convert_GMT_to_new('', '', $value['to_date']);
 $to_date = $to_date ? date("Y-m-d", strtotime($to_date)) : '';
 $download = '<a href="' . base_url() . '/user/user_invoice_download/' . $value['id'] . '" class="btn btn-royelblue btn-sm"  title="Download Invoice" ><i class="fa fa-cloud-download fa-fw"></i></a>&nbsp';
 if ($accountinfo['posttoexternal'] == 0) {
-    $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("N/A").'</button>';
+    if (isset($value['status']) && $value['status'] == '2') {
+        $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("PARTIAL").'</a>';
+    } elseif ($outstanding < -0.01) {
+        $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("Unpaid").'</a>';
+    } else {
+        $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("N/A").'</button>';
+    }
 } elseif (isset($value['status']) && $value['status'] == '2') {
     $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("PARTIAL").'</a>';
 } elseif ($outstanding > 0.01) {

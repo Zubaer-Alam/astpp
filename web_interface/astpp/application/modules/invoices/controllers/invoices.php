@@ -119,7 +119,13 @@ class Invoices extends MX_Controller
                     } else {
                         $posttoexternal = $this->common->get_field_name("posttoexternal", "accounts", array("id" => $value['accountid']));
                         if ($posttoexternal == 0) {
-                            $payment = "<button style='padding: 0 17px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
+                            if ($value['status'] == '2') {
+                                $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
+                            } elseif ($true_outstanding < -0.01) {
+                                $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
+                            } else {
+                                $payment = "<button style='padding: 0 17px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
+                            }
                         } elseif ($value['status'] == '2') {
                             $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
                         } elseif ($true_outstanding > 0.01) {
@@ -2189,7 +2195,13 @@ class Invoices extends MX_Controller
                 } else {
                     $posttoexternal = $this->common->get_field_name("posttoexternal", "accounts", array("id" => $accountid));
                     if ($posttoexternal == 0) {
-                        $payment = " <button style='padding: 0 8px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
+                        if ($value['status'] == '2') {
+                            $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
+                        } elseif ($outstanding < -0.01) {
+                            $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
+                        } else {
+                            $payment = " <button style='padding: 0 8px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
+                        }
                     } elseif ($value['status'] == '2') {
                         $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
                     } elseif ($outstanding > 0) {
@@ -2311,7 +2323,13 @@ class Invoices extends MX_Controller
             $download = '<a href="' . base_url() . '/user/user_invoice_download/' . $value['id'] . '/00' . $value['invoice_prefix'] . $value['invoiceid'] . '" class="btn btn-royelblue btn-sm"  title="Download Invoice" ><i class="fa fa-cloud-download fa-fw"></i></a>&nbsp';
             $posttoexternal = $this->common->get_field_name("posttoexternal", "accounts", array("id" => $value['accountid']));
             if ($posttoexternal == 0) {
-                $payment = " <button style='padding: 0 8px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
+                if (isset($value['status']) && $value['status'] == '2') {
+                    $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
+                } elseif ($outstanding < -0.01) {
+                    $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
+                } else {
+                    $payment = " <button style='padding: 0 8px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
+                }
             } elseif (isset($value['status']) && $value['status'] == '2') {
                 $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
             } elseif ($outstanding > 0) {
