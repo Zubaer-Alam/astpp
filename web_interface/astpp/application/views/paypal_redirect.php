@@ -21,7 +21,7 @@ window.addEventListener('DOMContentLoaded', function(){
 			<input type="hidden" readonly name="amount"  id="amount" value="<?php echo $total_amt; ?>">
 	        	  <input type="hidden" readonly name="cmd" value="_xclick">
 			  <input type="hidden" readonly  name="business" value="<?=$paypal_email_id;?>">
-			  <input type="hidden" readonly name="item_name" value= <?php echo (isset($item_name) && $item_name !='')?$item_name:$product_info['name']; ?> >
+			  <input type="hidden" readonly name="item_name" value="<?php echo isset($item_name) && $item_name != '' ? htmlspecialchars($item_name, ENT_QUOTES, 'UTF-8') : htmlspecialchars(isset($product_info['name']) ? $product_info['name'] : '', ENT_QUOTES, 'UTF-8'); ?>">
 			
 			  <input type="hidden" readonly name="item_number" value="<?php echo $order_id;?>"> 
 			  <input type="hidden" readonly name="LC" value="US">
@@ -49,7 +49,7 @@ window.addEventListener('DOMContentLoaded', function(){
 			  <!-- ASTPPCOM-727 Ashish start -->
 			  <input type="hidden" readonly name="cancel_return" value="<?php echo(isset($cancel_return) && $cancel_return !='')?$cancel_return:base_url().'user/user_available_products/'; ?>">
 			  <!-- ASTPPCOM-727 end -->
-			  <input type="hidden" readonly name="custom" id='custom' value=<?php echo (isset($account_id) && $account_id > 0)?$account_id:$product_info['product_category']; ?>>
+			  <input type="hidden" readonly name="custom" id="custom" value="<?php echo (int) (isset($account_id) && $account_id > 0 ? $account_id : (isset($product_info['product_category']) ? $product_info['product_category'] : 0)); ?>">
           		</div>
 		</form>
 	</div>

@@ -360,6 +360,15 @@ class Login extends MX_Controller
         redirect(base_url());
     }
 
+    /**
+     * PayPal IPN for postpaid dashboard top-up (no session; matches legacy paypal_response pattern).
+     */
+    function postpaid_settle_paypal_ipn()
+    {
+        $this->load->library('astpp/postpaid_paypal_ipn');
+        $this->postpaid_paypal_ipn->process();
+    }
+
     function paypal_response()
     {
         if (count($_POST) > 0) {

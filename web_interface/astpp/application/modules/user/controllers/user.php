@@ -38,6 +38,9 @@ class User extends MX_Controller
         $this->load->model('user_model');
         $this->load->library('did_lib');
         $this->load->library('astpp/payment');
+        if ($this->router->fetch_method() === 'user_postpaid_settle_paypal_ipn') {
+            return;
+        }
         if ($this->session->userdata('user_login') == FALSE)
             redirect(base_url() . 'login/login');
         $accountinfo = $this->session->userdata('accountinfo');
@@ -2811,6 +2814,107 @@ function user_invoice_unpaid_pay()
     $this->load->view("paypal_redirect", $data);
 }
 
+    /**
+     * Postpaid dashboard: validate session, create PayPal pending row, auto-post to PayPal (paypal_redirect).
+     */
+    function user_postpaid_settle_paypal_prepare()
+    {
+        $accountinfo = $this->session->userdata('accountinfo');
+        if (!$accountinfo || (int) $accountinfo['posttoexternal'] !== 1) {
+            redirect(base_url() . 'user/user/');
+            return;
+        }
+        if ((int) $accountinfo['paypal_permission'] !== 0) {
+            $this->session->set_flashdata('astpp_notification', gettext('PayPal is not available for this account.'));
+            redirect(base_url() . 'user/user/');
+            return;
+        }
+        $system_config = common_model::$global_config['system_config'];
+        $amount_base = (float) str_replace(',', '', (string) $this->input->post('amount_base', true));
+        $amount_account = (float) str_replace(',', '', (string) $this->input->post('amount_account', true));
+        if ($amount_base <= 0) {
+            $this->session->set_flashdata('astpp_notification', gettext('Invalid amount.'));
+            redirect(base_url() . 'user/user/');
+            return;
+        }
+        $is_supported = (int) $this->common->get_field_name('is_supported', 'currency', $accountinfo['currency_id']);
+        if ($is_supported === 1) {
+            $paypal_charge = $this->_postpaid_base_to_paypal_amount($amount_base, 'USD');
+        } else {
+            $paypal_charge = $amount_account > 0 ? $amount_account : $amount_base;
+        }
+        if ($paypal_charge <= 0) {
+            $this->session->set_flashdata('astpp_notification', gettext('Invalid amount.'));
+            redirect(base_url() . 'user/user/');
+            return;
+        }
+        if ($system_config['paypal_mode'] == 0) {
+            $paypal_url = $system_config['paypal_url'];
+            $paypal_email = $system_config['paypal_id'];
+        } else {
+            $paypal_url = $system_config['paypal_sandbox_url'];
+            $paypal_email = $system_config['paypal_sandbox_id'];
+        }
+        $this->db->where(array(
+            'amount' => '0',
+            'actual_amount' => '0',
+            'user_currency' => '',
+            'accountid' => $accountinfo['id']
+        ));
+        $this->db->delete('payment_transaction');
+        $this->load->helper('string');
+        $item_number = random_string('alnum', 64);
+        $this->db->insert('payment_transaction', array(
+            'accountid' => $accountinfo['id'],
+            'payment_method' => 'Paypal',
+            'transaction_details' => $item_number,
+            'amount' => 0,
+            'actual_amount' => 0,
+            'user_currency' => '',
+            'date' => gmdate('Y-m-d H:i:s')
+        ));
+        $note = trim((string) $this->input->post('item_name', true));
+        $data['paypal_url'] = $paypal_url;
+        $data['total_amt'] = number_format($paypal_charge, 2, '.', '');
+        $data['paypal_email_id'] = $paypal_email;
+        $data['item_name'] = $note !== '' ? $note : gettext('Postpaid account payment');
+        $data['account_id'] = (int) $accountinfo['id'];
+        $data['order_id'] = $item_number;
+        $data['notify_url'] = base_url() . 'login/postpaid_settle_paypal_ipn/';
+        $data['return'] = base_url() . 'user/user_postpaid_settle_paypal_return/';
+        $data['cancel_return'] = base_url() . 'user/user/';
+        $data['product_info'] = array('name' => $data['item_name']);
+        $this->load->view('paypal_redirect', $data);
+    }
+
+    /**
+     * Legacy URL; prefer login/postpaid_settle_paypal_ipn for IPN (no user session required).
+     */
+    function user_postpaid_settle_paypal_ipn()
+    {
+        $this->load->library('astpp/postpaid_paypal_ipn');
+        $this->postpaid_paypal_ipn->process();
+    }
+
+    /**
+     * Browser return from PayPal: do not post payments here (IPN is authoritative).
+     */
+    function user_postpaid_settle_paypal_return()
+    {
+        $this->session->set_flashdata('astpp_notification', gettext('Thank you. If you completed a payment, it may take a moment to appear on your dashboard.'));
+        redirect(base_url() . 'user/user/');
+    }
+
+    private function _postpaid_base_to_paypal_amount($amount_base, $to_currency)
+    {
+        $to_currency = trim((string) $to_currency);
+        $base = common_model::$global_config['system_config']['base_currency'];
+        $list = common_model::$global_config['currency_list'];
+        $from_rate = (isset($list[$base]) && (float) $list[$base] > 0) ? (float) $list[$base] : 1.0;
+        $to_rate = (isset($list[$to_currency]) && (float) $list[$to_currency] > 0) ? (float) $list[$to_currency] : 1.0;
+        return round((float) (($amount_base * $to_rate) / $from_rate), 8);
+    }
+
 function user_get_current_info()
 {
     $account_data = $this->session->userdata("accountinfo");
@@ -2836,18 +2940,31 @@ function user_get_current_info()
     $amount = $balance['posttoexternal'] == 1 ? $balance['credit_limit'] - $balance['balance'] : $balance['balance'];
     $result_array['balance'] = $this->common_model->calculate_currency_customer($amount);
 
-    $where_invoice = array(
-        "is_paid" => "1",
-        "accountid" => $account_data['id']
-    );
-    $query = $this->db_model->select("SUM(`debit`-`credit`) as invoice_amount", "view_invoices", $where_invoice, "", "", "", "");
-    $invoice_amount = (array) $query->first_row();
-    if (isset($invoice_amount['invoice_amount']) && $invoice_amount['invoice_amount'] != "") {
-        $invoice_amount['invoice_amount'] = $invoice_amount['invoice_amount'];
+    // Green tile "Outstanding": postpaid = net of all invoice_details for this account (includes invoiceid=0
+    // until ProcessInvoice attaches rows). Prepaid: view_invoices + is_paid (typically 0 for prepaid).
+    if ($balance['posttoexternal'] == 1) {
+        $net_row = $this->db
+            ->select('COALESCE(SUM(debit - credit), 0) AS net', false)
+            ->from('invoice_details')
+            ->where('accountid', (int) $account_data['id'])
+            ->get()
+            ->row_array();
+        $invoice_amount_raw = $net_row ? (float) $net_row['net'] : 0.0;
     } else {
-        $invoice_amount['invoice_amount'] = 0;
+        $where_invoice = array(
+            "is_paid" => "1",
+            "accountid" => $account_data['id']
+        );
+        $query = $this->db_model->select("SUM(`debit`-`credit`) as invoice_amount", "view_invoices", $where_invoice, "", "", "", "");
+        $invoice_amount = (array) $query->first_row();
+        if (isset($invoice_amount['invoice_amount']) && $invoice_amount['invoice_amount'] != "") {
+            $invoice_amount_raw = (float) $invoice_amount['invoice_amount'];
+        } else {
+            $invoice_amount_raw = 0.0;
+        }
     }
-    $result_array['invoice_amount'] = $this->common_model->calculate_currency_customer($invoice_amount['invoice_amount']);
+    $result_array['invoice_amount'] = $this->common_model->calculate_currency_customer($invoice_amount_raw);
+    $result_array['outstanding_net'] = $invoice_amount_raw;
     echo json_encode($result_array);
 }
 
@@ -2970,3 +3087,4 @@ function user_fssipdevices_routing_save(){
 
 }
 ?>
+
