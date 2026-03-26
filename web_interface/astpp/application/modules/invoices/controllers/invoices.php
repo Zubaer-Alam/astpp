@@ -2204,7 +2204,7 @@ class Invoices extends MX_Controller
                         }
                     } elseif ($value['status'] == '2') {
                         $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
-                    } elseif ($outstanding > 0) {
+                    } elseif ($outstanding > 0.01) {
                         $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
                     } else {
                         $payment = " <button style='padding: 0 8px;' type='button'  class='btn btn-success'>" . gettext("Paid") . "</button>";
@@ -2332,7 +2332,7 @@ class Invoices extends MX_Controller
                 }
             } elseif (isset($value['status']) && $value['status'] == '2') {
                 $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
-            } elseif ($outstanding > 0) {
+            } elseif ($outstanding > 0.01) {
                 $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
             } else {
                 $payment = " <button style='padding: 0 8px;' class='btn btn-success' type='button'>" . gettext("Paid") . "</button>";
