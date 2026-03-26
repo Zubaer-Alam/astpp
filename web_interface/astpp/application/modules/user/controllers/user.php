@@ -992,9 +992,26 @@ function user_refill_report_json()
     $paging_data = $this->form->load_grid_config($count_all, $_GET['rp'], $_GET['page']);
     $json_data = $paging_data["json_paging"];
     $query = $this->user_model->get_user_refill_list(true, $paging_data["paging"]["start"], $paging_data["paging"]["page_no"]);
-
-    $grid_fields = json_decode($this->user_form->build_user_refill_report());
-    $json_data['rows'] = $this->form->build_grid($query, $grid_fields);
+    foreach ($query->result_array() as $value) {
+        // Use invoice_details credit/debit for split payments (e.g. INVPAY + REFILL), not payment total.
+        $display_amount = (isset($value['credit']) && $value['credit'] > 0) ? $value['credit'] : (isset($value['debit']) && $value['debit'] > 0 ? $value['debit'] : $value['amount']);
+        $description = '';
+        if ($value['payment_method'] == "Paypal") {
+            $transaction_details = json_decode($value['transaction_details'], true);
+            $description = isset($transaction_details['description']) ? $transaction_details['description'] : $value['description'];
+        } else {
+            $description = $value['description'];
+        }
+        $json_data['rows'][] = array(
+            'cell' => array(
+                $this->common->convert_GMT_to('', '', $value['date']),
+                $this->common->convert_to_currency_account("", "", $display_amount),
+                $value['payment_method'],
+                $value['transaction_id'],
+                $description
+            )
+        );
+    }
     echo json_encode($json_data);
 }
 
