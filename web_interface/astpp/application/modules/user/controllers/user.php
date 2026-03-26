@@ -1082,16 +1082,16 @@ $to_date = $to_date ? date("Y-m-d", strtotime($to_date)) : '';
 $download = '<a href="' . base_url() . '/user/user_invoice_download/' . $value['id'] . '" class="btn btn-royelblue btn-sm"  title="Download Invoice" ><i class="fa fa-cloud-download fa-fw"></i></a>&nbsp';
 if ($accountinfo['posttoexternal'] == 0) {
     if (isset($value['status']) && $value['status'] == '2') {
-        $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("PARTIAL").'</a>';
+        $payment = ' <span class="btn btn-warning disabled" style="padding: 0 8px; pointer-events: none; opacity: 0.9; cursor: default;" title="' . gettext('Payment') . '">' . gettext("PARTIAL") . '</span>';
     } elseif ($outstanding > 0.01) {
-        $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("Unpaid").'</a>';
+        $payment = ' <span class="btn btn-warning disabled" style="padding: 0 8px; pointer-events: none; opacity: 0.9; cursor: default;" title="' . gettext('Payment') . '">' . gettext("Unpaid") . '</span>';
     } else {
         $payment = ' <button style="padding: 0 8px;" type="button"  class="btn btn-line-sky">'.gettext("N/A").'</button>';
     }
 } elseif (isset($value['status']) && $value['status'] == '2') {
-    $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("PARTIAL").'</a>';
+    $payment = ' <span class="btn btn-warning disabled" style="padding: 0 8px; pointer-events: none; opacity: 0.9; cursor: default;" title="' . gettext('Payment') . '">' . gettext("PARTIAL") . '</span>';
 } elseif ($outstanding > 0.01) {
-    $payment = ' <a style="padding: 0 8px;" href="' . base_url() . 'user/user_invoice_payment/' . $value['id'] . '" class="btn btn-warning"  title="Payment">'.gettext("Unpaid").'</a>';
+    $payment = ' <span class="btn btn-warning disabled" style="padding: 0 8px; pointer-events: none; opacity: 0.9; cursor: default;" title="' . gettext('Payment') . '">' . gettext("Unpaid") . '</span>';
 } else {
     $payment = ' <button style="padding: 0 8px;" class="btn btn-success" type="button">'.gettext("Paid").'</button>';
 }

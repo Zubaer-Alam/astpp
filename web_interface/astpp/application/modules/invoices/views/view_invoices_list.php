@@ -156,7 +156,7 @@ $logintype = $this->session->userdata('logintype');
 if ((isset($permissioninfo['invoices']['invoice_list']['generate'])) && ($permissioninfo['invoices']['invoice_list']['generate'] == 0) && ($permissioninfo['login_type'] == '2' or $permissioninfo['login_type'] == '1' or $permissioninfo['login_type'] == '0' or $permissioninfo['login_type'] == '3') or ($permissioninfo['login_type'] == '-1')) {
     ?>
 
-<div class="col-md-12 pb-4 px-0 text-right">
+<div class="col-md-12 pb-4 px-0 text-right astpp-hide-generate-invoice-btn" style="display: none;" aria-hidden="true">
 	<span id="generate_search" style="cursor: pointer;"
 		class='btn btn-info'><?php echo gettext('Generate Invoice'); ?></span>
 </div>
