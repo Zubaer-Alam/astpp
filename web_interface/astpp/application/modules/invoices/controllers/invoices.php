@@ -118,15 +118,16 @@ class Invoices extends MX_Controller
                         $delete_button = "<a onclick='invoice_delete($id)' class='btn btn-royelblue btn-sm'  title='Delete' ><i class='fa fa-trash fa-fw'></i></a>&nbsp";
                     } else {
                         $posttoexternal = $this->common->get_field_name("posttoexternal", "accounts", array("id" => $value['accountid']));
+                        $is_partial = ((float)($value['credit'] ?? 0) > 0.001 && $true_outstanding > 0.01);
                         if ($posttoexternal == 0) {
-                            if ($value['status'] == '2') {
+                            if ($is_partial) {
                                 $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
                             } elseif ($true_outstanding > 0.01) {
                                 $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
                             } else {
                                 $payment = "<button style='padding: 0 17px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
                             }
-                        } elseif ($value['status'] == '2') {
+                        } elseif ($is_partial) {
                             $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
                         } elseif ($true_outstanding > 0.01) {
                             $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
@@ -2194,15 +2195,16 @@ class Invoices extends MX_Controller
                     $outstanding = 0;
                 } else {
                     $posttoexternal = $this->common->get_field_name("posttoexternal", "accounts", array("id" => $accountid));
+                    $is_partial = ((float)($value['credit'] ?? 0) > 0.001 && $outstanding > 0.01);
                     if ($posttoexternal == 0) {
-                        if ($value['status'] == '2') {
+                        if ($is_partial) {
                             $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
                         } elseif ($outstanding > 0.01) {
                             $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
                         } else {
                             $payment = " <button style='padding: 0 8px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
                         }
-                    } elseif ($value['status'] == '2') {
+                    } elseif ($is_partial) {
                         $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
                     } elseif ($outstanding > 0.01) {
                         $payment = "<a style='padding: 0 8px;' href='" . base_url() . "invoices/invoice_summary/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
@@ -2270,13 +2272,15 @@ class Invoices extends MX_Controller
             $duedate = strtotime($value['due_date']);
             $due_date = date("d/m/Y", $duedate);
             $outstanding = $value['amount'];
+            $inv_credit = 0;
             $payment_last = '';
             $invoice_total_query = $this->db_model->select("sum(debit) as debit,sum(credit) as credit,created_date", "invoice_details", array(
                 "invoiceid" => $value['id']
             ), "created_date", "DESC", "1", "0");
             if ($invoice_total_query->num_rows() > 0) {
                 $invoice_total_query = $invoice_total_query->result_array();
-                $outstanding -= $invoice_total_query[0]['credit'];
+                $inv_credit = (float)$invoice_total_query[0]['credit'];
+                $outstanding -= $inv_credit;
 
                 $last_payment_date = $invoice_total_query[0]['created_date'];
                 if ($last_payment_date) {
@@ -2322,15 +2326,16 @@ class Invoices extends MX_Controller
             }
             $download = '<a href="' . base_url() . '/user/user_invoice_download/' . $value['id'] . '/00' . $value['invoice_prefix'] . $value['invoiceid'] . '" class="btn btn-royelblue btn-sm"  title="Download Invoice" ><i class="fa fa-cloud-download fa-fw"></i></a>&nbsp';
             $posttoexternal = $this->common->get_field_name("posttoexternal", "accounts", array("id" => $value['accountid']));
+            $is_partial = ($inv_credit > 0.001 && $outstanding > 0.01);
             if ($posttoexternal == 0) {
-                if (isset($value['status']) && $value['status'] == '2') {
+                if ($is_partial) {
                     $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
                 } elseif ($outstanding > 0.01) {
                     $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
                 } else {
                     $payment = " <button style='padding: 0 8px;' type='button'  class='btn btn-line-sky'>" . gettext("N/A") . "</button>";
                 }
-            } elseif (isset($value['status']) && $value['status'] == '2') {
+            } elseif ($is_partial) {
                 $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("PARTIAL") . "</a>";
             } elseif ($outstanding > 0.01) {
                 $payment = " <a style='padding: 0 8px;' href='" . base_url() . "user/user_invoice_payment/" . $value["id"] . "' class='btn btn-warning'  title='Payment'>" . gettext("Unpaid") . "</a>";
