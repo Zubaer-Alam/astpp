@@ -89,7 +89,7 @@ class payment {
 					$payment_info['price'] = $remaining;
 					$invoiceid = $this->CI->invoice->add_invoice_details($payment_info, $account_info, $tax_calculation, $last_payment_id, $currency_info);
 				} else {
-					$invoiceid = 0;
+					$invoiceid = '0';
 				}
 				if ($remaining < $total_amt) {
 					$this->CI->invoice->update_balance($total_amt - $remaining, $account_info['id'], $account_info['posttoexternal'], 'credit');

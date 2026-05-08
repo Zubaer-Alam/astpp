@@ -676,6 +676,7 @@ class Login extends MX_Controller
         $this->session->set_userdata('username', $account_res['number']);
         $this->session->set_userdata('accountinfo', $result);
         $token = $this->token($result['id'], 'e', $result);
+        $this->session->set_userdata('token', $token);
         $accessid = $this->encrypt($this->config->item('private_key'), $result['id'] . $result['type']);
         $this->session->set_userdata('ipsettings_token', $accessid);
 
