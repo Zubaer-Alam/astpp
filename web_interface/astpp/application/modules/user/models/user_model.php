@@ -150,16 +150,13 @@ class user_model extends CI_Model
         $this->db_model->build_search('user_refill_report_search');
         $accountinfo = $this->session->userdata['accountinfo'];
 
+        $this->db->where('invoice_details.is_tax', 0);
+        $this->db->where('payment_transaction.accountid', $accountinfo['id']);
+
         if ($flag) {
-            $query = $this->db_model->getJionQuery('payment_transaction', 'payment_transaction.*,invoice_details.*,', array(
-                'invoice_details.product_category' => 3,
-                'payment_transaction.accountid' => $accountinfo['id']
-            ), 'invoice_details', 'payment_transaction.id=invoice_details.payment_id', 'inner', $limit, $start, 'DESC', 'payment_transaction.id');
+            $query = $this->db_model->getJionQuery('payment_transaction', 'payment_transaction.*,invoice_details.*,', '', 'invoice_details', 'payment_transaction.id=invoice_details.payment_id', 'inner', $limit, $start, 'DESC', 'payment_transaction.id');
         } else {
-            $query = $this->db_model->getJionQueryCount('payment_transaction', 'payment_transaction.*', array(
-                'invoice_details.product_category' => 3,
-                'payment_transaction.accountid' => $accountinfo['id']
-            ), 'invoice_details', 'payment_transaction.id=invoice_details.payment_id', 'inner', '', '', 'DESC', 'payment_transaction.id');
+            $query = $this->db_model->getJionQueryCount('payment_transaction', 'payment_transaction.*', '', 'invoice_details', 'payment_transaction.id=invoice_details.payment_id', 'inner', '', '', 'DESC', 'payment_transaction.id');
         }
 
         return $query;
