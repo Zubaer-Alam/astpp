@@ -1597,7 +1597,7 @@ function user_sipdevices_json()
                 $this->common->convert_GMT_to('', '', $value['creation_date']),
                 $this->common->convert_GMT_to('', '', $value['last_modified_date']),
                 $voicemail_enabled,
-                $this->common->get_status('status', 'sip_devices', $value),
+                ($value['status'] == 0 ? gettext('Active') : gettext('Inactive')),
                     // Jaimin ASTPPCOM-984
                 $this->freeswitch->get_advance_buttons_fssipdevices ( $value ['id'] )
                     // End
@@ -1630,9 +1630,8 @@ function user_sipdevices_clearsearchfilter()
 
 function user_sipdevices_add()
 {
-    $data['page_title'] = gettext('Create SIP Device');
-    $data['form'] = $this->form->build_form($this->user_form->build_user_sipdevices_form(), "");
-    $this->load->view('view_user_sipdevices_add_edit', $data);
+    echo '<div style="text-align:center;padding:20px;">' . gettext("Permission Denied, contact your administrator") . '</div>';
+    exit();
 }
 
 function user_sipdevices_edit($edit_id = '')
@@ -1660,6 +1659,7 @@ function user_sipdevices_save()
             exit();
         } else {
             unset($add_array['fs_username']);
+            unset($add_array['status']);
             $this->db->select('username');
             $fs_username = (array) $this->db->get_where("sip_devices", array(
                 "id" => $add_array['id']
@@ -1672,37 +1672,20 @@ function user_sipdevices_save()
             exit();
         }
     } else {
-        $data['page_title'] = gettext('Create SIP Device');
-        if ($this->form_validation->run() == FALSE) {
-            $data['validation_errors'] = validation_errors();
-            echo $data['validation_errors'];
-            exit();
-        } else {
-            $this->user_model->user_sipdevice_add($add_array);
-            echo json_encode(array(
-                "SUCCESS" => gettext("SIP Device Added Successfully!")
-            ));
-            exit();
-        }
+        echo json_encode(array("ERROR" => gettext("Permission Denied, contact your administrator")));
+        exit();
     }
 }
 
 function user_sipdevices_delete($id)
 {
-    $this->permission->customer_web_record_permission($id, 'sip_devices', 'user/user_sipdevices/');
-    $this->db->delete('sip_devices', array(
-        'id' => $id
-    ));
-    $this->session->set_flashdata('astpp_notification', gettext('SIP Device Removed Sucessfully!'));
+    $this->session->set_flashdata('astpp_notification', gettext('Permission Denied, contact your administrator'));
     redirect(base_url() . "user/user_sipdevices/");
 }
 
 function user_sipdevices_delete_multiple()
 {
-    $ids = $this->input->post("selected_ids", true);
-    $where = "id IN ($ids)";
-    $this->db->delete("sip_devices", $where);
-    echo TRUE;
+    echo json_encode(array("ERROR" => gettext("Permission Denied, contact your administrator")));
 }
 
 function user_animap_list()
@@ -2805,14 +2788,14 @@ function user_orders_complete($order_id)
 
 function user_orders_terminate($order_id)
 {
-    $this->load->module('orders/orders');
-    $this->orders->orders_terminate($order_id);
+    echo '<div style="text-align:center;padding:20px;">' . gettext("Permission Denied, contact your administrator") . '</div>';
+    exit();
 }
 
 function user_orders_termination()
 {
-    $this->load->module('orders/orders');
-    $this->orders->orders_users_terminate();
+    echo json_encode(array("ERROR" => gettext("Permission Denied, contact your administrator")));
+    exit();
 }
 
 function user_invoice_unpaid_pay()

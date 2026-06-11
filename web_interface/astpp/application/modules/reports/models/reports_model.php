@@ -40,8 +40,8 @@ class Reports_model extends CI_Model
         // ASTPPCOM-825 end
         $table_name = 'cdrs';
         if ($this->session->userdata('advance_search_date') == 1) {
-            $where['callstart >= '] = date("Y-m-d") . " 00:00:00";
-            $where['callstart <='] = date("Y-m-d") . " 23:59:59";
+            //$where['callstart >= '] = date("Y-m-d") . " 00:00:00";
+            //$where['callstart <='] = date("Y-m-d") . " 23:59:59";
         } else {
             if ($this->session->userdata('customerReport_cdrs_year') != '' and $this->session->userdata('customerReport_cdrs_year') != '0') {
                 $table_name = $this->session->userdata('customerReport_cdrs_year');
@@ -165,8 +165,8 @@ class Reports_model extends CI_Model
 
         if ($this->session->userdata('advance_search') != 1) {
             if ($this->session->userdata('advance_search_date') == 1) {
-                $where['callstart >= '] = date("Y-m-d") . " 00:00:00";
-                $where['callstart <='] = date("Y-m-d") . " 23:59:59";
+                //$where['callstart >= '] = date("Y-m-d") . " 00:00:00";
+                //$where['callstart <='] = date("Y-m-d") . " 23:59:59";
             }
         } else {
             if ($this->session->userdata('providerreport_cdrs_year') != '' and $this->session->userdata('providerreport_cdrs_year') != '0') {
@@ -193,9 +193,9 @@ class Reports_model extends CI_Model
 
     function users_cdrs_list($flag, $accountid, $entity_type, $start, $limit)
     {
-        $where = "callstart >= '" . date('Y-m-d 00:00:00') . "' AND callstart <='" . date('Y-m-d 23:59:59') . "' AND ";
+        //$where = "callstart >= '" . date('Y-m-d 00:00:00') . "' AND callstart <='" . date('Y-m-d 23:59:59') . "' AND ";
         $account_type = $entity_type == 'provider' ? 'provider_id' : 'accountid';
-        $where .= "accountid = '" . $accountid . "' ";
+        $where = "accountid = '" . $accountid . "' ";
         $table = $entity_type == 'reseller' ? 'reseller_cdrs' : 'cdrs';
         if ($flag) {
             $query = $this->db_model->select("*", $table, $where, "callstart", "DESC", $limit, $start);

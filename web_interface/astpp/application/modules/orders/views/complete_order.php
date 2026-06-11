@@ -153,7 +153,7 @@ if ($accountinfo['type'] == 0 || $accountinfo['type'] == 3) {
 			$orderids = $this->db_model->getSelect("type", "accounts", array("id" => $order_items['accountid']))->row_array();
 				if (($orderids['type'] != 1 && $order_items['is_terminated'] != 0) || $order_items['product_category'] != 4) {?>
 				<div class="col-md-6 mt-4 mx-auto">
-			<?php if($order_items['is_terminated'] != 1 ){ ?>	
+			<?php if($order_items['is_terminated'] != 1 && $this->session->userdata('logintype') == 2){ ?>
 			<a
 						href="<?php echo base_url().$order_terminate_url.$order_items['orderid'];?>"
 						rel='facebox'><span class="btn btn-block btn-line-sky"><?php echo gettext("Terminate"); ?></span></a>

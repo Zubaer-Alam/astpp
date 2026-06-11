@@ -346,11 +346,9 @@ class user_model extends CI_Model
                 'name' => 'default'
             ));
         }
-        $add_array['status'] = isset($add_array['status']) ? $add_array['status'] : "0";
         $new_array = array(
             'last_modified_date' => gmdate('Y-m-d H:i:s'),
             'username' => $add_array['fs_username'],
-            'status' => $add_array['status'],
             'codec' => $add_array['codec'],
             'dir_params' => json_encode($parms_array),
             'dir_vars' => json_encode($parms_array_vars),
@@ -377,8 +375,8 @@ class user_model extends CI_Model
         }
         $table_name = $account_data['type'] != 1 ? 'cdrs' : 'reseller_cdrs';
         if ($this->session->userdata('advance_search_date') == 1) {
-            $where['callstart >= '] = date("Y-m-d") . " 00:00:00";
-            $where['callstart <='] = date("Y-m-d") . " 23:59:59";
+            //$where['callstart >= '] = date("Y-m-d") . " 00:00:00";
+            //$where['callstart <='] = date("Y-m-d") . " 23:59:59";
         } else {
             if ($this->session->userdata('cdrs_year') != '' and $this->session->userdata('cdrs_year') != '0') {
                 $table_name = $this->session->userdata('cdrs_year');

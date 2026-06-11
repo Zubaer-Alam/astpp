@@ -62,19 +62,6 @@
             </div>     
             <div class="p-4 col-md-12">
                 <div class="col-md-12 p-0">
-                    <div class="float-left">
-                        <a href='<?php echo base_url()."user/user_sipdevices_add/"; ?>' rel="facebox_medium" title="Add">
-                            <span class="btn btn-line-warning">
-                                <i class="fa fa-plus-circle fa-lg"></i><?php echo gettext('Create');?>
-                            </span>
-                        </a>
-                    </div>
-                    <div id="left_panel_delete" class="float-left mt-0 px-2" onclick="delete_multiple('/user/user_sipdevices_delete_multiple/')">
-                        <span class="btn btn-line-danger">
-                            <i class="fa fa-times-circle fa-lg"></i>
-                            <?php echo gettext('Delete');?>
-                        </span>
-                    </div>
                     
                         <div  id="show_search" class= "btn btn-warning float-right"><i class="fa fa-search"></i><?php echo gettext('Search');?> </div>
                 </div> 
