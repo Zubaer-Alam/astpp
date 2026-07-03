@@ -364,7 +364,7 @@ class Invoices extends MX_Controller
 
     private function _get_invoice_cdrs($invoiceid)
     {
-        $this->db->select('sip_user, callednum, callstart, billseconds, debit, calltype');
+        $this->db->select('sip_user, callerid, callednum, callstart, billseconds, debit, calltype');
         $this->db->from('cdrs');
         $this->db->where('invoiceid', $invoiceid);
         // optional: only show billable calls

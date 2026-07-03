@@ -512,7 +512,7 @@
 					?>
 					<tr style="width:100%;">
 						<td style="width:18%; border-bottom:1px solid #f5f5f5;">
-							<?php echo htmlspecialchars($cdr['sip_user']); ?>
+							<?php echo htmlspecialchars(in_array($cdr['calltype'], ['DID', 'CALLINGCARD']) ? $cdr['callerid'] : $cdr['sip_user']); ?>
 						</td>
 						<td style="width:22%; border-bottom:1px solid #f5f5f5;">
 							<?php echo htmlspecialchars($cdr['callednum']); ?>
