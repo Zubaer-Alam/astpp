@@ -479,8 +479,7 @@
 		<tr>
 			<td style="padding:10px 14px; line-height:1.6;">
 				<?php echo gettext('You can consult the invoices and the communication details on your web interface:'); ?><br>
-				https://billing.4z.com<br><br>
-				<b><?php echo htmlspecialchars($account_number); ?></b>
+				https://billing.4z.com
 			</td>
 		</tr>
 	</table>
