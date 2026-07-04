@@ -453,6 +453,37 @@
 		</p>
 	</div>
 
+	<table style="width:100%; margin-top:12px; border:0.5mm solid #ddd; border-radius:4px;" cellspacing="0" cellpadding="0">
+		<tr>
+			<td style="padding:10px 14px; background:#f5f5f5; border-bottom:0.3mm solid #ddd;">
+				<b><?php echo gettext('How to pay?'); ?></b>
+			</td>
+		</tr>
+		<tr>
+			<td style="padding:10px 14px; line-height:1.6;">
+				<b>1)</b> <?php echo gettext('On-line:'); ?> https://billing.4z.com (<?php echo gettext('via PayPal'); ?>)<br><br>
+				<b>2)</b> <?php echo gettext('Postal account:'); ?> CH62 0900 0000 6156 8160 1,
+				<?php echo gettext('Beneficiary:'); ?> 4z.com S&agrave;rl, CP 32, 1015 Lausanne,
+				<?php echo gettext('Payment reason: your 4z.com phone number'); ?> <b><?php echo htmlspecialchars($account_number); ?></b><br><br>
+				<b>3)</b> <?php echo gettext('Bank account:'); ?> UBS SA, CH-1002 Lausanne,
+				<?php echo gettext('Beneficiary:'); ?> 4z.com S&agrave;rl, CP 32, 1015 Lausanne,
+				IBAN: CH35 0024 3243 2297 6801 E,
+				<?php echo gettext('Payment reason: your 4z.com phone number'); ?> <b><?php echo htmlspecialchars($account_number); ?></b>
+			</td>
+		</tr>
+		<tr>
+			<td style="padding:10px 14px; background:#f5f5f5; border-top:0.3mm solid #ddd; border-bottom:0.3mm solid #ddd;">
+				<b><?php echo gettext('Details?'); ?></b>
+			</td>
+		</tr>
+		<tr>
+			<td style="padding:10px 14px; line-height:1.6;">
+				<?php echo gettext('You can consult the invoices and the communication details on your web interface:'); ?><br>
+				https://billing.4z.com<br><br>
+				<b><?php echo htmlspecialchars($account_number); ?></b>
+			</td>
+		</tr>
+	</table>
 
 </page>
 
