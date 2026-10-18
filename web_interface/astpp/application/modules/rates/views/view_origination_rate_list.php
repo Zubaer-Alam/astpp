@@ -4,22 +4,41 @@
 function search_btn(){
     document.getElementById('origination_rate_batch_dlt').style.display = 'block';
 }
+var originationDeleteBusy = false;
 function check_btn(){
-	 	$.ajax({
-			type: "POST",
-			url: "<?= base_url()?>/rates/origination_rates_list_delete/",
-			data:'',
-			success:function(alt) {
-			 if(alt > 0){
-		  	   post_request_for_batch_delete("origination_rate_grid",alt,"origination_rate_list_search");
-	  	           $('#origination_rate_grid').flexOptions({newp:1}).flexReload();
-			  }else{
-			     alert('No record found');
-			  }
-			}
-		});
+    if (originationDeleteBusy) return;
+    originationDeleteBusy = true;
+    var button = $('#origination_rate_batch_dlt');
+    var submitted = $('#origination_rate_list_search').serialize();
+    button.prop('disabled', true);
+    function finished(){ originationDeleteBusy = false; button.prop('disabled', false); }
+    $.ajax({
+        type: 'POST',
+        url: '<?= base_url()?>rates/origination_rates_list_delete/',
+        data: submitted,
+        dataType: 'json',
+        success: function(preview){
+            if (!preview.ok) { alert(preview.message || 'Unable to prepare deletion.'); finished(); return; }
+            if (!confirm('Delete exactly ' + preview.count + ' matching origination rates?')) { finished(); return; }
+            if ($('#origination_rate_list_search').serialize() !== submitted) { alert('Search fields changed. Search and confirm again.'); finished(); return; }
+            $.ajax({
+                type: 'POST',
+                url: '<?= base_url()?>rates/origination_rates_list_batch_delete/',
+                data: submitted + '&delete_token=' + encodeURIComponent(preview.token),
+                dataType: 'json',
+                success: function(result){
+                    if (!result.ok) { alert(result.message || 'Deletion was not completed.'); return; }
+                    alert('Deleted ' + result.deleted + ' origination rates.');
+                    // Restore this tab's search only after the explicit delete completes.
+                    post_request_for_search('origination_rate_grid', '', 'origination_rate_list_search');
+                },
+                error: function(){ alert('Could not confirm the result. Do not retry blindly; check database counts.'); },
+                complete: finished
+            });
+        },
+        error: function(){ alert('Unable to prepare deletion. No delete request was sent.'); finished(); }
+    });
 }
-
     $(document).ready(function() {
         build_grid("origination_rate_grid","",<? echo $grid_fields; ?>,<? echo $grid_buttons; ?>);
         $('.checkall').click(function () {

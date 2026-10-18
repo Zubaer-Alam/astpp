@@ -32,21 +32,6 @@ class rates_model extends CI_Model
     function get_termination_rates_list($flag, $start = 0, $limit = 0)
     {
         $this->db_model->build_search('termination_rates_list_search');
-
-        if ($this->session->userdata('advance_batch_delete') == 1) {
-
-            // Samir - Added if condition to resolve "Delete Search Record - This option deletes ALL termination rates #264"
-            // if (count($this->db->ar_where) > 0)
-            // {
-            $this->db->where(array(
-                "trunk_id >" => "0"
-            ));
-            $this->db->delete("outbound_routes");
-            // }
-            $this->session->set_userdata('advance_batch_delete', '0');
-            $this->session->unset_userdata('advance_batch_delete');
-        }
-        $this->db_model->build_search('termination_rates_list_search');
         /**
          * ***********
          */
@@ -56,6 +41,100 @@ class rates_model extends CI_Model
             $query = $this->db_model->countQuery("*", "outbound_routes", "");
         }
         return $query;
+    }
+
+    // Search-delete uses its own validated criteria, never shared grid-session state.
+    function termination_delete_criteria($input)
+    {
+        if (!is_array($input)) throw new Exception('Invalid search form.');
+        $string_fields = array('pattern', 'comment', 'precedence');
+        $number_fields = array('connectcost', 'includedseconds', 'cost', 'init_inc', 'inc');
+        $allowed = array_merge($string_fields, $number_fields, array('trunk_id', 'status', 'ajax_search', 'advance_search', 'action'));
+        $csrf_name = $this->config->item('csrf_token_name');
+        if ($csrf_name) $allowed[] = $csrf_name;
+        $clauses = array(); $values = array();
+        foreach ($input as $field => $entry) {
+            if (!in_array($field, $allowed, true)) throw new Exception('Unrecognized search field. Reload this page.');
+            if (in_array($field, array('ajax_search', 'advance_search', 'action', $csrf_name), true)) continue;
+            if ($field === 'trunk_id' || $field === 'status') {
+                if (!is_scalar($entry)) throw new Exception('Invalid selection.');
+                $value = trim((string)$entry);
+                if ($value === '') continue;
+                if ($field === 'trunk_id' && (!ctype_digit($value) || (int)$value < 1)) throw new Exception('Select a valid trunk.');
+                if ($field === 'status' && !in_array($value, array('0', '1'), true)) throw new Exception('Invalid status.');
+                $clauses[] = '`'.$field.'` = ?'; $values[] = $value;
+                continue;
+            }
+            if (!is_array($entry) || !array_key_exists($field, $entry) || !is_scalar($entry[$field])) throw new Exception('Invalid search field.');
+            $value = trim((string)$entry[$field]);
+            if ($value === '') continue;
+            $is_number = in_array($field, $number_fields, true);
+            $operator_key = $field.($is_number ? '-integer' : '-string');
+            if (!isset($entry[$operator_key]) || !is_scalar($entry[$operator_key])) throw new Exception('Missing search operator.');
+            $operator = (string)$entry[$operator_key];
+            if ($is_number) {
+                $operators = array('1'=>'=', '2'=>'<>', '3'=>'>', '4'=>'<', '5'=>'>=', '6'=>'<=');
+                if (!isset($operators[$operator]) || !is_numeric($value) || !is_finite((float)$value)) throw new Exception('Invalid numeric search.');
+                $clauses[] = '`'.$field.'` '.$operators[$operator].' ?'; $values[] = $value;
+            } else {
+                if (!in_array($operator, array('1','2','3','4','5','6'), true)) throw new Exception('Invalid text search.');
+                $comparison = in_array($operator, array('1','5','6'), true) ? 'LIKE' : ($operator === '2' ? 'NOT LIKE' : ($operator === '3' ? '=' : '<>'));
+                if ($operator === '1' || $operator === '2') $value = '%'.$value.'%';
+                elseif ($operator === '3' || $operator === '4') { if ($field === 'pattern') $value = '^'.$value.'.*'; }
+                elseif ($operator === '5') $value = ($field === 'pattern' ? '^' : '').$value.'%';
+                elseif ($operator === '6') $value = '%'.$value.($field === 'pattern' ? '.*' : '');
+                $clauses[] = '`'.$field.'` '.$comparison.' ?'; $values[] = $value;
+            }
+        }
+        if (!$clauses) throw new Exception('Choose a search filter first. Unfiltered deletion is blocked.');
+        return array('sql'=>implode(' AND ', $clauses), 'values'=>$values);
+    }
+
+    // Bounded batches keep 100,000+ rate previews out of session storage/memory.
+    function termination_delete_snapshot($criteria, $lock = false)
+    {
+        $digest = hash_init('sha256'); $count = 0; $last = 0;
+        do {
+            $query = $this->db->query('SELECT * FROM outbound_routes WHERE ('.$criteria['sql'].') AND id > ? ORDER BY id ASC LIMIT 1000'.($lock ? ' FOR UPDATE' : ''), array_merge($criteria['values'], array($last)));
+            if (!$query) throw new Exception('Unable to read the selected rates. No deletion completed.');
+            $rows = $query->result_array(); $query->free_result();
+            foreach ($rows as $row) {
+                if (!isset($row['id']) || !ctype_digit((string)$row['id']) || (int)$row['id'] <= $last) throw new Exception('Invalid rate selection.');
+                $encoded = json_encode($row);
+                if ($encoded === false) throw new Exception('Unable to prepare this rate selection.');
+                hash_update($digest, $encoded."\n"); $last = (int)$row['id']; $count++;
+            }
+        } while (count($rows) === 1000);
+        return array('count'=>$count, 'digest'=>hash_final($digest));
+    }
+
+    function termination_delete_confirmed($preview)
+    {
+        $engine = $this->db->query("SHOW TABLE STATUS WHERE Name = 'outbound_routes'");
+        if (!$engine) throw new Exception('Unable to verify transactional deletion support.');
+        $metadata = $engine->row_array(); $engine->free_result();
+        if (!isset($metadata['Engine']) || strcasecmp($metadata['Engine'], 'InnoDB') !== 0) throw new Exception('Safe deletion requires the outbound_routes table to use InnoDB. No rates deleted.');
+        $old_debug = $this->db->db_debug;
+        $this->db->db_debug = false; // Query failures must reach our rollback handler.
+        $started = false;
+        try {
+            if (!$this->db->query('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')) throw new Exception('Unable to prepare safe deletion.');
+            if (!$this->db->query('START TRANSACTION')) throw new Exception('Unable to start safe deletion.');
+            $started = true;
+            $current = $this->termination_delete_snapshot($preview['criteria'], true);
+            if ($current['count'] !== $preview['count'] || !hash_equals($preview['digest'], $current['digest'])) throw new Exception('The selected rates changed. Nothing was deleted. Search and confirm again.');
+            if ($current['count'] < 1) throw new Exception('No matching rates. Nothing was deleted.');
+            if (!$this->db->query('DELETE FROM outbound_routes WHERE '.$preview['criteria']['sql'], $preview['criteria']['values'])) throw new Exception('Deletion failed.');
+            if ((int)$this->db->affected_rows() !== $preview['count']) throw new Exception('Selection changed during deletion. Nothing was deleted.');
+            if (!$this->db->query('COMMIT')) throw new Exception('Unable to confirm deletion. Check database state before retrying.');
+            $started = false;
+            return $current['count'];
+        } catch (Exception $error) {
+            if ($started) $this->db->query('ROLLBACK');
+            throw $error;
+        } finally {
+            $this->db->db_debug = $old_debug;
+        }
     }
 
     function get_termination_rate($flag, $start = 0, $limit = 0, $export = true)
@@ -70,6 +149,116 @@ class rates_model extends CI_Model
             $result = $this->db->count_all_results();
         }
         return $result;
+    }
+
+    // Keep search-delete within the same base scope as the origination grid.
+    private function origination_delete_scope()
+    {
+        $scope = array('accountid'=>'0');
+        $type = (string)$this->session->userdata('logintype');
+        if ($type === '1' || $type === '5') {
+            $account = $this->session->userdata('accountinfo');
+            if (!isset($account['id']) || !ctype_digit((string)$account['id']) || (int)$account['id'] < 1) throw new Exception('Unable to verify reseller scope.');
+            $scope['reseller_id'] = (string)(int)$account['id'];
+        }
+        return $scope;
+    }
+
+    // Search-delete uses its own validated criteria, never shared grid-session state.
+    function origination_delete_criteria($input)
+    {
+        if (!is_array($input)) throw new Exception('Invalid search form.');
+        $string_fields = array('pattern', 'comment');
+        $number_fields = array('connectcost', 'includedseconds', 'cost', 'init_inc', 'inc');
+        $allowed = array_merge($string_fields, $number_fields, array('country_id', 'pricelist_id', 'reseller_id', 'status', 'ajax_search', 'advance_search', 'action'));
+        $csrf_name = $this->config->item('csrf_token_name');
+        if ($csrf_name) $allowed[] = $csrf_name;
+        $clauses = array(); $values = array();
+        foreach ($input as $field => $entry) {
+            if (!in_array($field, $allowed, true)) throw new Exception('Unrecognized search field. Reload this page.');
+            if (in_array($field, array('ajax_search', 'advance_search', 'action', $csrf_name), true)) continue;
+            if (in_array($field, array('country_id', 'pricelist_id', 'reseller_id', 'status'), true)) {
+                if (!is_scalar($entry)) throw new Exception('Invalid selection.');
+                $value = trim((string)$entry);
+                if ($value === '') continue;
+                if ($field !== 'status' && (!ctype_digit($value) || ($field !== 'reseller_id' && (int)$value < 1))) throw new Exception('Select a valid country, rate group or reseller.');
+                if ($field === 'status' && !in_array($value, array('0', '1'), true)) throw new Exception('Invalid status.');
+                $clauses[] = '`'.$field.'` = ?'; $values[] = $value;
+                continue;
+            }
+            if (!is_array($entry) || !array_key_exists($field, $entry) || !is_scalar($entry[$field])) throw new Exception('Invalid search field.');
+            $value = trim((string)$entry[$field]);
+            if ($value === '') continue;
+            $is_number = in_array($field, $number_fields, true);
+            $operator_key = $field.($is_number ? '-integer' : '-string');
+            if (!isset($entry[$operator_key]) || !is_scalar($entry[$operator_key])) throw new Exception('Missing search operator.');
+            $operator = (string)$entry[$operator_key];
+            if ($is_number) {
+                $operators = array('1'=>'=', '2'=>'<>', '3'=>'>', '4'=>'<', '5'=>'>=', '6'=>'<=');
+                if (!isset($operators[$operator]) || !is_numeric($value) || !is_finite((float)$value)) throw new Exception('Invalid numeric search.');
+                $clauses[] = '`'.$field.'` '.$operators[$operator].' ?'; $values[] = $value;
+            } else {
+                if (!in_array($operator, array('1','2','3','4','5','6'), true)) throw new Exception('Invalid text search.');
+                $comparison = in_array($operator, array('1','5','6'), true) ? 'LIKE' : ($operator === '2' ? 'NOT LIKE' : ($operator === '3' ? '=' : '<>'));
+                if ($operator === '1' || $operator === '2') $value = '%'.$value.'%';
+                elseif ($operator === '3' || $operator === '4') { if ($field === 'pattern') $value = '^'.$value.'.*'; }
+                elseif ($operator === '5') $value = ($field === 'pattern' ? '^' : '').$value.'%';
+                elseif ($operator === '6') $value = '%'.$value.($field === 'pattern' ? '.*' : '');
+                $clauses[] = '`'.$field.'` '.$comparison.' ?'; $values[] = $value;
+            }
+        }
+        if (!$clauses) throw new Exception('Choose a search filter first. Unfiltered deletion is blocked.');
+        $scope = $this->origination_delete_scope();
+        foreach ($scope as $field => $value) { $clauses[] = '`'.$field.'` = ?'; $values[] = $value; }
+        return array('sql'=>implode(' AND ', $clauses), 'values'=>$values, 'scope'=>$scope);
+    }
+
+    // Bounded batches keep 100,000+ rate previews out of session storage/memory.
+    function origination_delete_snapshot($criteria, $lock = false)
+    {
+        $digest = hash_init('sha256'); $count = 0; $last = 0;
+        do {
+            $query = $this->db->query('SELECT * FROM routes WHERE ('.$criteria['sql'].') AND id > ? ORDER BY id ASC LIMIT 1000'.($lock ? ' FOR UPDATE' : ''), array_merge($criteria['values'], array($last)));
+            if (!$query) throw new Exception('Unable to read the selected rates. No deletion completed.');
+            $rows = $query->result_array(); $query->free_result();
+            foreach ($rows as $row) {
+                if (!isset($row['id']) || !ctype_digit((string)$row['id']) || (int)$row['id'] <= $last) throw new Exception('Invalid rate selection.');
+                $encoded = json_encode($row);
+                if ($encoded === false) throw new Exception('Unable to prepare this rate selection.');
+                hash_update($digest, $encoded."\n"); $last = (int)$row['id']; $count++;
+            }
+        } while (count($rows) === 1000);
+        return array('count'=>$count, 'digest'=>hash_final($digest));
+    }
+
+    function origination_delete_confirmed($preview)
+    {
+        if (!isset($preview['criteria']['scope']) || $preview['criteria']['scope'] !== $this->origination_delete_scope()) throw new Exception('Account scope changed. Search and confirm again.');
+        $engine = $this->db->query("SHOW TABLE STATUS WHERE Name = 'routes'");
+        if (!$engine) throw new Exception('Unable to verify transactional deletion support.');
+        $metadata = $engine->row_array(); $engine->free_result();
+        if (!isset($metadata['Engine']) || strcasecmp($metadata['Engine'], 'InnoDB') !== 0) throw new Exception('Safe deletion requires the routes table to use InnoDB. No rates deleted.');
+        $old_debug = $this->db->db_debug;
+        $this->db->db_debug = false; // Query failures must reach our rollback handler.
+        $started = false;
+        try {
+            if (!$this->db->query('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')) throw new Exception('Unable to prepare safe deletion.');
+            if (!$this->db->query('START TRANSACTION')) throw new Exception('Unable to start safe deletion.');
+            $started = true;
+            $current = $this->origination_delete_snapshot($preview['criteria'], true);
+            if ($current['count'] !== $preview['count'] || !hash_equals($preview['digest'], $current['digest'])) throw new Exception('The selected rates changed. Nothing was deleted. Search and confirm again.');
+            if ($current['count'] < 1) throw new Exception('No matching rates. Nothing was deleted.');
+            if (!$this->db->query('DELETE FROM routes WHERE '.$preview['criteria']['sql'], $preview['criteria']['values'])) throw new Exception('Deletion failed.');
+            if ((int)$this->db->affected_rows() !== $preview['count']) throw new Exception('Selection changed during deletion. Nothing was deleted.');
+            if (!$this->db->query('COMMIT')) throw new Exception('Unable to confirm deletion. Check database state before retrying.');
+            $started = false;
+            return $current['count'];
+        } catch (Exception $error) {
+            if ($started) $this->db->query('ROLLBACK');
+            throw $error;
+        } finally {
+            $this->db->db_debug = $old_debug;
+        }
     }
 
     function get_origination_rate($flag, $start = 0, $limit = 0, $export = true)
@@ -122,32 +311,11 @@ class rates_model extends CI_Model
     function get_origination_rate_list($flag, $start = 0, $limit = 0)
     {
         $where = array();
-        $this->db_model->build_search('origination_rate_list_search');
         if ($this->session->userdata('logintype') == 1 || $this->session->userdata('logintype') == 5) {
             $account_data = $this->session->userdata("accountinfo");
             $where = array(
                 "reseller_id" => $account_data['id']
             );
-        }
-        if ($this->session->userdata('advance_batch_delete') == 1) {
-            // if (count($this->db->ar_where) > 0)
-            // {
-            if (! empty($where)) {
-                $this->db->where($where);
-            }
-            /*
-             * else{
-             * $where = array (
-             * 'reseller_id' => '0'
-             * );
-             * $this->db->where ( $where );
-             *
-             * }
-             */
-            $this->db->delete("routes");
-            // }
-            $this->session->set_userdata('advance_batch_delete', '0');
-            $this->session->unset_userdata('advance_batch_delete');
         }
         $where['accountid'] = '0';
         $this->db_model->build_search('origination_rate_list_search');

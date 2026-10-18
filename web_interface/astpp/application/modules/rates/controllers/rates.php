@@ -45,6 +45,9 @@ class Rates extends MX_Controller
 
     function termination_rates_list()
     {
+        // Cancel stale shared flags from the legacy deferred-delete workflow.
+        $this->session->unset_userdata('advance_batch_delete');
+        $this->session->unset_userdata('advance_batch_data_delete');
         $data['username'] = $this->session->userdata('user_name');
         $data['page_title'] = gettext('Termination Rates');
         $data['search_flag'] = true;
@@ -72,12 +75,35 @@ class Rates extends MX_Controller
         echo json_encode($json_data);
     }
 
+    // Preview/confirm are explicit POSTs; list/grid requests never delete rates.
+    private function termination_delete_allowed()
+    {
+        $permissions = $this->session->userdata('permissioninfo');
+        $role = isset($permissions['login_type']) ? (string)$permissions['login_type'] : '';
+        $allowed = in_array($role, array('-1', '0', '3'), true) ||
+            (isset($permissions['rates']['termination_rates_list']['delete']) && (string)$permissions['rates']['termination_rates_list']['delete'] === '0');
+        if (!$this->session->userdata('user_login') || !$allowed || !isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') throw new Exception('Deletion requires an authorized POST request.');
+    }
+
     function termination_rates_list_delete($flag = '')
     {
-        $json_data = array();
-        $this->session->set_userdata('advance_batch_data_delete', 1);
-        $count_all = $this->rates_model->get_termination_rates_list(false);
-        echo $count_all;
+        $reply = array('ok'=>false);
+        try {
+            $this->termination_delete_allowed();
+            $criteria = $this->rates_model->termination_delete_criteria($this->input->post(NULL, true));
+            $snapshot = $this->rates_model->termination_delete_snapshot($criteria);
+            if ($snapshot['count'] < 1) throw new Exception('No matching rates. Nothing to delete.');
+            $token = bin2hex(random_bytes(32));
+            $previews = $this->session->userdata('termination_delete_previews');
+            if (!is_array($previews)) $previews = array();
+            foreach ($previews as $key => $preview) if ($preview['expires'] < time()) unset($previews[$key]);
+            while (count($previews) >= 5) array_shift($previews);
+            $previews[$token] = array('criteria'=>$criteria, 'count'=>$snapshot['count'], 'digest'=>$snapshot['digest'], 'expires'=>time()+600);
+            $this->session->set_userdata('termination_delete_previews', $previews);
+            $reply = array('ok'=>true, 'count'=>$snapshot['count'], 'token'=>$token);
+        } catch (Exception $error) { $reply['message'] = $error->getMessage(); }
+        header('Content-Type: application/json');
+        echo json_encode($reply);
     }
 
     function termination_rate_import()
@@ -749,6 +775,9 @@ class Rates extends MX_Controller
 
     function origination_rates_list()
     {
+        // Cancel stale flags from the legacy deferred search-delete workflow.
+        $this->session->unset_userdata('advance_batch_delete');
+        $this->session->unset_userdata('advance_batch_data_delete');
         $data['username'] = $this->session->userdata('user_name');
         $data['page_title'] = gettext('Origination Rates');
         $data['search_flag'] = true;
@@ -777,12 +806,34 @@ class Rates extends MX_Controller
         echo json_encode($json_data);
     }
 
+    private function origination_delete_allowed()
+    {
+        $permissions = $this->session->userdata('permissioninfo');
+        $role = isset($permissions['login_type']) ? (string)$permissions['login_type'] : '';
+        $allowed = in_array($role, array('-1', '0', '3'), true) ||
+            (isset($permissions['rates']['origination_rates_list']['delete']) && (string)$permissions['rates']['origination_rates_list']['delete'] === '0');
+        if (!$this->session->userdata('user_login') || !$allowed || !isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') throw new Exception('Deletion requires an authorized POST request.');
+    }
+
     function origination_rates_list_delete($flag = '')
     {
-        $json_data = array();
-        $this->session->set_userdata('advance_batch_data_delete', 1);
-        $count_all = $this->rates_model->get_origination_rate_list(false);
-        echo $count_all;
+        $reply = array('ok'=>false);
+        try {
+            $this->origination_delete_allowed();
+            $criteria = $this->rates_model->origination_delete_criteria($this->input->post(NULL, true));
+            $snapshot = $this->rates_model->origination_delete_snapshot($criteria);
+            if ($snapshot['count'] < 1) throw new Exception('No matching rates. Nothing to delete.');
+            $token = bin2hex(random_bytes(32));
+            $previews = $this->session->userdata('origination_delete_previews');
+            if (!is_array($previews)) $previews = array();
+            foreach ($previews as $key => $preview) if ($preview['expires'] < time()) unset($previews[$key]);
+            while (count($previews) >= 5) array_shift($previews);
+            $previews[$token] = array('criteria'=>$criteria, 'count'=>$snapshot['count'], 'digest'=>$snapshot['digest'], 'expires'=>time()+600);
+            $this->session->set_userdata('origination_delete_previews', $previews);
+            $reply = array('ok'=>true, 'count'=>$snapshot['count'], 'token'=>$token);
+        } catch (Exception $error) { $reply['message'] = $error->getMessage(); }
+        header('Content-Type: application/json');
+        echo json_encode($reply);
     }
 
     function termination_rate_add($type = "")
@@ -1438,32 +1489,42 @@ class Rates extends MX_Controller
 
     function termination_rates_list_batch_delete()
     {
-        $ajax_search = $this->input->post('ajax_search', 0);
-        if ($this->input->post('advance_search', TRUE) == 1) {
-            $this->session->set_userdata('advance_batch_delete', $this->input->post('advance_search'));
-            $action = $this->input->post();
-            unset($action['action']);
-            unset($action['advance_search']);
-            $this->session->set_userdata('termination_rates_list_search', $action);
-        }
-        if (@$ajax_search != 1) {
-            redirect(base_url() . 'rates/termination_rates_list/');
-        }
+        $reply = array('ok'=>false);
+        try {
+            $this->termination_delete_allowed();
+            $token = $this->input->post('delete_token', true);
+            if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/D', $token)) throw new Exception('Missing deletion confirmation. Reload and search again.');
+            $previews = $this->session->userdata('termination_delete_previews');
+            if (!is_array($previews) || !isset($previews[$token])) throw new Exception('Confirmation expired or already used. Search again.');
+            $preview = $previews[$token];
+            unset($previews[$token]);
+            $this->session->set_userdata('termination_delete_previews', $previews);
+            if ($preview['expires'] < time()) throw new Exception('Confirmation expired. Search again.');
+            $count = $this->rates_model->termination_delete_confirmed($preview);
+            $reply = array('ok'=>true, 'deleted'=>$count);
+        } catch (Exception $error) { $reply['message'] = $error->getMessage(); }
+        header('Content-Type: application/json');
+        echo json_encode($reply);
     }
 
     function origination_rates_list_batch_delete()
     {
-        $ajax_search = $this->input->post('ajax_search', 0);
-        if ($this->input->post('advance_search', TRUE) == 1) {
-            $this->session->set_userdata('advance_batch_delete', $this->input->post('advance_search'));
-            $action = $this->input->post();
-            unset($action['action']);
-            unset($action['advance_search']);
-            $this->session->set_userdata('origination_rate_list_search', $action);
-        }
-        if (@$ajax_search != 1) {
-            redirect(base_url() . 'rates/origination_rates_list/');
-        }
+        $reply = array('ok'=>false);
+        try {
+            $this->origination_delete_allowed();
+            $token = $this->input->post('delete_token', true);
+            if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/D', $token)) throw new Exception('Missing deletion confirmation. Reload and search again.');
+            $previews = $this->session->userdata('origination_delete_previews');
+            if (!is_array($previews) || !isset($previews[$token])) throw new Exception('Confirmation expired or already used. Search again.');
+            $preview = $previews[$token];
+            unset($previews[$token]);
+            $this->session->set_userdata('origination_delete_previews', $previews);
+            if ($preview['expires'] < time()) throw new Exception('Confirmation expired. Search again.');
+            $count = $this->rates_model->origination_delete_confirmed($preview);
+            $reply = array('ok'=>true, 'deleted'=>$count);
+        } catch (Exception $error) { $reply['message'] = $error->getMessage(); }
+        header('Content-Type: application/json');
+        echo json_encode($reply);
     }
 
     function termination_rate_import_mapper()

@@ -4,25 +4,41 @@
 function search_btn(){
     document.getElementById('termination_rate_batch_dlt').style.display = 'block';
 }
+var terminationDeleteBusy = false;
 function check_btn(){
- 	$.ajax({
-		type: "POST",
-		url: "<?= base_url()?>/rates/termination_rates_list_delete/",
-		data:'',
-		success:function(alt) {
-		 if(alt > 0){
-	  	   post_request_for_batch_delete("termination_rates_grid",alt,"termination_rate_search");
-  	           $('#termination_rate_grid').flexOptions({newp:1}).flexReload();
-		  }else{
-		     alert('No record found');
-		  }
-		}
-	});
+    if (terminationDeleteBusy) return;
+    terminationDeleteBusy = true;
+    var button = $('#termination_rate_batch_dlt');
+    var submitted = $('#termination_rate_search').serialize();
+    button.prop('disabled', true);
+    function finished(){ terminationDeleteBusy = false; button.prop('disabled', false); }
+    $.ajax({
+        type: 'POST',
+        url: '<?= base_url()?>rates/termination_rates_list_delete/',
+        data: submitted,
+        dataType: 'json',
+        success: function(preview){
+            if (!preview.ok) { alert(preview.message || 'Unable to prepare deletion.'); finished(); return; }
+            if (!confirm('Delete exactly ' + preview.count + ' matching termination rates?')) { finished(); return; }
+            if ($('#termination_rate_search').serialize() !== submitted) { alert('Search fields changed. Search and confirm again.'); finished(); return; }
+            $.ajax({
+                type: 'POST',
+                url: '<?= base_url()?>rates/termination_rates_list_batch_delete/',
+                data: submitted + '&delete_token=' + encodeURIComponent(preview.token),
+                dataType: 'json',
+                success: function(result){
+                    if (!result.ok) { alert(result.message || 'Deletion was not completed.'); return; }
+                    alert('Deleted ' + result.deleted + ' termination rates.');
+                    // Restore this tab's search only after the explicit delete completes.
+                    post_request_for_search('termination_rate_grid', '', 'termination_rate_search');
+                },
+                error: function(){ alert('Could not confirm the result. Do not retry blindly; check database counts.'); },
+                complete: finished
+            });
+        },
+        error: function(){ alert('Unable to prepare deletion. No delete request was sent.'); finished(); }
+    });
 }
-        $("#termination_rate_batch_dlt").click(function(){
-            post_request_for_batch_delete("termination_rate_grid","","termination_rate_search");
-            $('#termination_rate_grid').flexOptions({newp:1}).flexReload();
-        }); 
     $(document).ready(function() {
 
 
