@@ -180,9 +180,7 @@ if (! isset($csv_tmp_data)) {
 					data:"sweepid="+sweep_id, 
 					success: function(response) {
                        $('.invoice_day').parents('div.form-group').removeClass("d-none");               
-                       $('.invoice_day').selectpicker();
-                       $('.invoice_day').html(response);
-                       $('.selectpicker').selectpicker();
+                       $('#invoice_day').html(response).selectpicker('refresh');
 
                     }
                 });

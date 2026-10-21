@@ -203,6 +203,8 @@ class Account_import extends MX_Controller
         $invoice_details_array = array();
         $number = array();
         $email = array();
+        $count = 0;
+        $invalid_count = 0;
         if (! empty($csv_tmp_data)) {
             $this->db->select('id');
             $this->db->order_by('id', 'DESC');
@@ -219,8 +221,6 @@ class Account_import extends MX_Controller
             $invoiceconf = $this->db->get('invoice_conf');
             $invoiceconf = (array) $invoiceconf->first_row();
 
-            $count = 0;
-            $invalid_count = 0;
             foreach ($csv_tmp_data as $key => $csv_data) {
                 $new_array = array();
                 $error = null;
@@ -250,7 +250,7 @@ class Account_import extends MX_Controller
                         if($add_array["email-select"] == "Email"){
                             $new_array['email'] = $csv_data[$add_array["email-select"]];
                         }else{
-                            $new_array['email'] = $csv_data[$add_array["email-select"]] . '@' . $csv_data[$add_array["email-select"]] . '.com';
+                            $new_array['email'] = $csv_data[$add_array["email-select"]];
                             $email[$csv_data[$add_array["email-select"]]] = $new_array['email'];
                         }
                     } else {
@@ -424,7 +424,13 @@ class Account_import extends MX_Controller
         $data = array();
         $data['invalid_count'] = $invalid_count;
         $data['count'] = $count;
-        $data['page_title'] = gettext("Account Import Error");
+        if ($count == 0) {
+            $data['page_title'] = gettext("No Accounts Imported");
+        } elseif ($invalid_count > 0) {
+            $data['page_title'] = gettext("Account Import Completed with Skipped Records");
+        } else {
+            $data['page_title'] = gettext("Account Import Successful");
+        }
         $this->load->view('view_import_error', $data);
     }
 

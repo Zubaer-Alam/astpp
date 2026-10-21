@@ -20,7 +20,7 @@
 			<div class="row">
 				<div class="col-md-12">
 					<div class="card">
-						<h3 class="bg-secondary text-light p-3 rounded-top"> <?php echo gettext("Error In CSV File"); ?> </h3>
+						<h3 class="bg-secondary text-light p-3 rounded-top"> <?php echo $page_title; ?> </h3>
 						<div class="col-md-12 p-4">
 							<?php echo gettext("Records imported successfully").'. : '; ?><?php echo $count;?>
 							<br />
