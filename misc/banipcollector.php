@@ -1,4 +1,4 @@
-#!/usr/bin/php 
+#!/usr/bin/php
 <?php
 $name = $_SERVER["argv"][1];
 $ip = $_SERVER["argv"][2];
