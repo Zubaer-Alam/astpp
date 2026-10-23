@@ -811,6 +811,7 @@ class Form {
 									
 							$fieldstr = $this->CI->{$this->lib_class}->build_custome_edit_button ( $ActionArr [5]->EDIT, $row [$field_arr [2]], $row ["id"] );
 							$jsn_tmp [$field_key] = $acctype != '' ? $fieldstr . $acctype : $fieldstr;
+/* Temporarily disabled for admin-only GUI access; retained for future review.
 							$sub_login_arr = '';
 							if ($ActionArr [5]->EDIT->url == "accounts/customer_edit/") {
 								$sub_login_arr = "<a href='".base_url()."login/login_as_customer/".$row ['id']."' title='Login As Customer'><i class='fa fa-sign-in' aria-hidden='true'></i></a>";
@@ -821,6 +822,7 @@ class Form {
 								$sub_login_arr = "<a href='".base_url()."login/login_as_reseller/".$row ['id']."' title='Login As Reseller'><i class='fa fa-sign-in' aria-hidden='true'></i></a>";
 								$jsn_tmp [$field_key] = $fieldstr . $acctype . $sub_login_arr;
 							}
+*/
 						} else {
 							$jsn_tmp [$field_key] = $row [$field_arr [2]];
 						}

@@ -79,12 +79,20 @@ class Login extends MX_Controller
                 $user_valid = $this->Auth_model->verify_login($_POST['username'], $_POST['password']);
 
                 if ($user_valid == 1) {
+/* Temporarily disabled for admin-only GUI access; retained for future review.
                     $this->session->set_userdata('user_login', TRUE);
                     $where = "(number = '" . $this->db->escape_str($_POST['username']) . "' OR email = '" . $this->db->escape_str($_POST['username']) . "') and deleted = 0";
+*/
+                    $where = "(number = BINARY '" . $this->db->escape_str($_POST['username']) . "' OR email = BINARY '" . $this->db->escape_str($_POST['username']) . "') AND password = '" . $this->db->escape_str($_POST['password']) . "' AND type IN (-1,2) AND deleted = 0 AND status = 0";
 
                     $result = $this->db_model->getSelect("*", "accounts", $where);
                     $result = $result->result_array();
+                    if (empty($result)) {
+                        show_error('Permission Denied!', 403);
+                        return;
+                    }
                     $result = $result[0];
+                    $this->session->set_userdata('user_login', TRUE);
 
                     $user_multi_level = 0;
                     $addon_status = $this->db_model->countQuery("*", "addons", array(
@@ -565,6 +573,7 @@ class Login extends MX_Controller
 
     function login_as_reseller($select_id)
     {
+/* Temporarily disabled for admin-only GUI access; retained for future review.
         $accountinfo = $this->session->userdata('accountinfo');
         if($accountinfo['type'] == '-1' || $accountinfo['type'] == '2' || $accountinfo['type'] == '1'){
 		if($accountinfo['type'] == '1'){
@@ -584,11 +593,14 @@ class Login extends MX_Controller
         	$this->session->sess_destroy();
         	redirect(base_url() ."login/login/");
         }
+*/
+        show_error('Permission Denied!', 403);
     }
 
 
     function login_as_customer($select_id)
     {
+/* Temporarily disabled for admin-only GUI access; retained for future review.
        $accountinfo = $this->session->userdata('accountinfo');
        if($accountinfo['type'] == '-1' || $accountinfo['type'] == '2' || $accountinfo['type'] == '1'){
        		 if($accountinfo['type'] == '1'){
@@ -609,6 +621,8 @@ class Login extends MX_Controller
         	redirect(base_url() ."login/login/");
         }
         
+*/
+        show_error('Permission Denied!', 403);
     }
 
 
@@ -642,6 +656,11 @@ class Login extends MX_Controller
             'id' => $new_login_id
         );
         $account_res = (array) $this->db->get_where("accounts", $where)->first_row();
+        if (empty($account_res) || !in_array((string) $account_res['type'], array('-1', '2'), true)
+            || $account_res['deleted'] != 0 || $account_res['status'] != 0) {
+            show_error('Permission Denied!', 403);
+            return;
+        }
         $master_login_details = array();
         if ($master_id != '0') {
             $where = array(
@@ -655,10 +674,13 @@ class Login extends MX_Controller
             );
         }
         $this->session->set_userdata('user_login', TRUE);
+/* Temporarily disabled for admin-only GUI access; retained for future review.
         $where = "number = '" . $this->db->escape_str($account_res['number']) . "' OR email = '" . $this->db->escape_str($account_res['number']) . "'";
         $result = $this->db_model->getSelect("*", "accounts", $where);
         $result = $result->result_array();
         $result = $result[0];
+*/
+        $result = $account_res;
 	$password=$this->common->decode($result['password']);
         $permission_result = $this->db_model->getSelect("*", "permissions", array(
             'id' => $result['permission_id']

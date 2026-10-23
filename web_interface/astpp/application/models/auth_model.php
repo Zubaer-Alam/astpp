@@ -28,7 +28,10 @@ class Auth_model extends CI_Model {
 		$q = "SELECT COUNT(*) as cnt FROM accounts WHERE (number = BINARY '" . $this->db->escape_str ( $username ) . "'";
 		$q .= " OR email = BINARY '" . $this->db->escape_str ( $username ) . "')";
 		$q .= " AND password = '" . $this->db->escape_str ( $password ) . "'";
+/* Temporarily disabled for admin-only GUI access; retained for future review.
 		$q .= " AND type IN (1,2,3,4,5,0,-1) AND deleted = 0 AND status = 0";
+*/
+		$q .= " AND type IN (-1,2) AND deleted = 0 AND status = 0";
 		$query = $this->db->query ( $q );
 		if ($query->num_rows () > 0) {
 			$row = $query->row ();
