@@ -221,7 +221,8 @@ if (!empty($csv_tmp_data)) { ?>
 								 <?php
         foreach ($mapto_fields['general_info'] as $csv_key => $csv_value) {
         	// ASTPPCOM-1358_gautam_start
-            $custom_value = $csv_value . gettext("-select");
+            $custom_value = $csv_value . '-select';
+            $selected_column = isset($column_mappings[$csv_value]) ? $column_mappings[$csv_value] : '';
             // ASTPPCOM-1358_gautam_end
             $params_arr = array(
                 "id" => $custom_value,
@@ -233,9 +234,9 @@ if (!empty($csv_tmp_data)) { ?>
             echo "<td>$mapper_array[$csv_value]</td>";
             echo "<td>";
             if ($csv_value != "number" && $csv_value != "email") {
-                echo str_replace('col-md-5', 'col-md-12', str_replace('form-control', '', form_dropdown_all($params_arr, $file_data, '')));
+                echo str_replace('col-md-5', 'col-md-12', str_replace('form-control', '', form_dropdown_all($params_arr, $file_data, $selected_column)));
             } else {
-                echo str_replace('col-md-5', 'col-md-12', str_replace('form-control', '', form_dropdown($params_arr, $file_data, '')));
+                echo str_replace('col-md-5', 'col-md-12', str_replace('form-control', '', form_dropdown($params_arr, array('' => gettext('--Select--')) + $file_data, $selected_column)));
             }
             echo "</td>";
             echo "</tr>";
@@ -265,7 +266,8 @@ if (!empty($csv_tmp_data)) { ?>
 								<?php
         foreach ($mapto_fields['settings'] as $csv_key => $csv_value) {
         	// ASTPPCOM-1358_gautam_start
-            $custom_value = $csv_value . gettext("-select");
+            $custom_value = $csv_value . '-select';
+            $selected_column = isset($column_mappings[$csv_value]) ? $column_mappings[$csv_value] : '';
             // ASTPPCOM-1358_gautam_end
             $params_arr = array(
                 "id" => $custom_value,
@@ -276,7 +278,7 @@ if (!empty($csv_tmp_data)) { ?>
             echo "<td><b>" . gettext($csv_key) . '(' . gettext($csv_value) . ")</b></td>";
             echo "<td>$mapper_array[$csv_value]</td>";
             echo "<td>";
-            echo str_replace('col-md-5', 'col-md-12', str_replace('form-control', '', form_dropdown_all($params_arr, $file_data, '')));
+            echo str_replace('col-md-5', 'col-md-12', str_replace('form-control', '', form_dropdown_all($params_arr, $file_data, $selected_column)));
             echo "</td>";
             echo "</tr>";
         }

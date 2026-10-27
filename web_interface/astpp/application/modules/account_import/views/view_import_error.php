@@ -24,7 +24,14 @@
 						<div class="col-md-12 p-4">
 							<?php echo gettext("Records imported successfully").'. : '; ?><?php echo $count;?>
 							<br />
-							<?php echo gettext("Records not imported")." : "; ?> <?php echo $invalid_count;?>  
+							<?php echo gettext("Records not imported")." : "; ?> <?php echo $invalid_count;?>
+                            <?php if (!empty($row_errors)) { ?>
+                            <ul class="mt-3">
+                                <?php foreach ($row_errors as $row_error) { ?>
+                                <li><?php echo htmlspecialchars($row_error, ENT_QUOTES, 'UTF-8'); ?></li>
+                                <?php } ?>
+                            </ul>
+                            <?php } ?>
 						</div>
 					</div>
 				</div>
@@ -32,7 +39,7 @@
 		</div>
 		<div class="container">
 			<div class="col-md-12 pb-2 mt-5">
-				<i><?php echo gettext("Note : Duplicate accounts with account number / email are ignored.");?></i>
+						<i><?php echo gettext("Note : Duplicate accounts with account number / email are ignored. Postpaid rows with invalid opening balances are also skipped.");?></i>
 				<div class="pull-right">
 					<a href="<?= base_url().'accounts/customer_list/'?>"><input
 						class="btn btn-line-parrot" id="customer_list" type="button"

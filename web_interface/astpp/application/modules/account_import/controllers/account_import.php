@@ -107,6 +107,7 @@ class Account_import extends MX_Controller
                                 if ($sipdevice_flag == 1) {
                                     unset($data['mapto_fields']['settings']['SIP Username'], $data['mapto_fields']['settings']['SIP Password']);
                                 }
+                                $data['column_mappings'] = $this->_customer_column_mappings($field_select, $data['mapto_fields'], $this->input->post());
                                 $full_path = $this->config->item('rates-file-path');
                                 $actual_file_name = "ASTPP-Customer-import" . date("Y-m-d H:i:s") . "." . $ext;
                                 $actual_file_name = str_replace(' ', '-', $actual_file_name);
@@ -205,6 +206,7 @@ class Account_import extends MX_Controller
         $email = array();
         $count = 0;
         $invalid_count = 0;
+        $row_errors = array();
         if (! empty($csv_tmp_data)) {
             $this->db->select('id');
             $this->db->order_by('id', 'DESC');
@@ -225,6 +227,16 @@ class Account_import extends MX_Controller
                 $new_array = array();
                 $error = null;
                 $invalid_flag = FALSE;
+                if ($default_fields['posttoexternal'] == 1) {
+                    try {
+                        $opening_balance = $this->_postpaid_opening_balance($add_array, $csv_data);
+                    } catch (InvalidArgumentException $exception) {
+                        $row_errors[] = sprintf(gettext('CSV row %d: %s'), $key + 2, $exception->getMessage());
+                        $invalid_count++;
+                        $i++;
+                        continue;
+                    }
+                }
                 if (! empty($add_array["number-select"]) && $csv_data[$add_array["number-select"]] && is_numeric($csv_data[$add_array["number-select"]]) && ! isset($number[$csv_data[$add_array["number-select"]]])) {
                     $this->db->select('id');
                     $number_result = (array) $this->db->get_where('accounts', array(
@@ -288,7 +300,7 @@ class Account_import extends MX_Controller
                     $new_array['cps'] = ! empty($add_array["cps-select"]) && ! empty($csv_data[$add_array["cps-select"]]) ? $csv_data[$add_array["cps-select"]] : $add_array['cps'];
 
                     $balance_prepaid = $default_fields['posttoexternal'] == 0 && ! empty($add_array["balance-select"]) && ! empty($csv_data[$add_array["balance-select"]]) > 0 ? $this->common_model->add_calculate_currency($csv_data[$add_array["balance-select"]], '', '', false, false) : ($default_fields['posttoexternal'] == 0 && $add_array['balance'] > 0 ? $this->common_model->add_calculate_currency($add_array['balance'], '', '', false, false) : 0);
-                    $new_array['balance'] = $balance_prepaid;
+                    $new_array['balance'] = $default_fields['posttoexternal'] == 1 ? $opening_balance : $balance_prepaid;
 
                     $credit_limit = $default_fields['posttoexternal'] == 1 && ! empty($add_array["credit_limit-select"]) && ! empty($csv_data[$add_array["credit_limit-select"]]) > 0 ? $this->common_model->add_calculate_currency($csv_data[$add_array["credit_limit-select"]], '', '', false, false) : ($default_fields['posttoexternal'] == 1 && $add_array['credit_limit'] > 0 ? $this->common_model->add_calculate_currency($add_array['credit_limit'], '', '', false, false) : 0);
 
@@ -334,7 +346,9 @@ class Account_import extends MX_Controller
                     $new_array['notify_credit_limit'] = '';
 
                     $final_new_array=$new_array;
-                    unset($final_new_array['balance']);
+                    if ($default_fields['posttoexternal'] == 0) {
+                        unset($final_new_array['balance']);
+                    }
                     $this->db->insert('accounts', $final_new_array);
 
                     $accountid = $this->db->insert_id();
@@ -408,7 +422,7 @@ class Account_import extends MX_Controller
                         $this->signup_lib->account_taxes($tax_id, $accountid, $current_date);
                     }
                     $new_array['id'] = $accountid;
-                    if ($balance_prepaid > 0 || $credit_limit > 0) {
+                    if ($default_fields['posttoexternal'] == 0 && ($balance_prepaid > 0 || $credit_limit > 0)) {
                         $this->signup_lib->generate_receipt($new_array, $balance_prepaid, $credit_limit);
                     }
                     $count ++;
@@ -423,6 +437,7 @@ class Account_import extends MX_Controller
         }
         $data = array();
         $data['invalid_count'] = $invalid_count;
+        $data['row_errors'] = $row_errors;
         $data['count'] = $count;
         if ($count == 0) {
             $data['page_title'] = gettext("No Accounts Imported");
@@ -432,6 +447,71 @@ class Account_import extends MX_Controller
             $data['page_title'] = gettext("Account Import Successful");
         }
         $this->load->view('view_import_error', $data);
+    }
+
+    private function _customer_column_mappings($headers, $fields, $submitted)
+    {
+        $matches = array();
+        foreach ($headers as $header => $label) {
+            $normalized = strtolower(trim(preg_replace('/^\xEF\xBB\xBF/', '', trim((string) $header))));
+            $matches[$normalized][] = (string) $header;
+        }
+        $selected = array();
+        foreach ($fields as $group) {
+            foreach ($group as $field) {
+                $input_name = $field . '-select';
+                if (array_key_exists($input_name, $submitted)) {
+                    $value = $submitted[$input_name];
+                    $selected[$field] = is_scalar($value) && array_key_exists((string) $value, $headers) ? (string) $value : '';
+                } else {
+                    $key = strtolower($field);
+                    $selected[$field] = isset($matches[$key]) && count($matches[$key]) == 1 ? $matches[$key][0] : '';
+                }
+            }
+        }
+        return $selected;
+    }
+
+    private function _postpaid_opening_balance($submitted, $row)
+    {
+        $column = isset($submitted['balance-select']) ? $submitted['balance-select'] : '';
+        if (!is_scalar($column)) {
+            throw new InvalidArgumentException(gettext('Invalid balance column selection.'));
+        }
+        $value = '';
+        if ((string) $column !== '') {
+            if (!array_key_exists($column, $row)) {
+                throw new InvalidArgumentException(gettext('Selected balance column is missing.'));
+            }
+            $value = $row[$column];
+        }
+        if (!is_scalar($value) && $value !== null) {
+            throw new InvalidArgumentException(gettext('Opening balance must be a signed decimal amount.'));
+        }
+        if (trim((string) $value) === '') {
+            $value = isset($submitted['balance']) ? $submitted['balance'] : '0';
+        }
+        if (!is_scalar($value) && $value !== null) {
+            throw new InvalidArgumentException(gettext('Opening balance must be a signed decimal amount.'));
+        }
+        $value = trim((string) $value);
+        if ($value === '') {
+            $value = '0';
+        }
+        if (!preg_match('/^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/D', $value)) {
+            throw new InvalidArgumentException(gettext('Opening balance must be a signed decimal amount; use a dot and no currency or thousands separators.'));
+        }
+        $negative = substr($value, 0, 1) === '-';
+        $parts = explode('.', ltrim($value, '+-'), 2);
+        $whole = ltrim($parts[0], '0');
+        $whole = $whole === '' ? '0' : $whole;
+        $fraction = isset($parts[1]) ? $parts[1] : '';
+        if (strlen($whole) > 15 || strlen($fraction) > 5) {
+            throw new InvalidArgumentException(gettext('Opening balance exceeds 15 integer digits or 5 decimal places.'));
+        }
+        $fraction = rtrim($fraction, '0');
+        $value = $whole . ($fraction !== '' ? '.' . $fraction : '');
+        return $negative && $value !== '0' ? '-' . $value : $value;
     }
 
     private function _create_common_array()
