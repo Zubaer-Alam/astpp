@@ -295,7 +295,7 @@ class Accounts_form extends common
                     'size' => '20',
                     'class' => "text field medium"
                 ),
-                'required|notMatch[number]|chk_password_expression',
+                $this->CI->common->edit_password_rules('accounts', $id, 'password', 'required|notMatch[number]'),
                 'tOOL TIP',
                 ''
             );
@@ -461,7 +461,7 @@ class Accounts_form extends common
                     'onmouseover' => 'seetext(password)',
                     'onmouseout' => 'hidepassword(password)'
                 ),
-                'required|chk_password_expression',
+                'required',
                 'tOOL TIP',
                 '',
                 '<i style="cursor:pointer; font-size: 17px; position:absolute; right:20px; bottom: 7px;" title="Reset Password" class="change_pass align-self-end text-success fa fa-refresh" ></i>'
@@ -1697,7 +1697,7 @@ class Accounts_form extends common
                     'size' => '20',
                     'class' => "text field medium"
                 ),
-                'required|notMatch[number]|chk_password_expression',
+                $this->CI->common->edit_password_rules('accounts', $id, 'password', 'required|notMatch[number]'),
                 'tOOL TIP',
                 ''
             );
@@ -1839,7 +1839,7 @@ class Accounts_form extends common
                     'onmouseover' => 'seetext(password)',
                     'onmouseout' => 'hidepassword(password)'
                 ),
-                'required|chk_password_expression',
+                'required',
                 'tOOL TIP',
                 '',
                 '<i style="cursor:pointer; font-size: 17px; position:absolute; right:20px; bottom: 7px;" title="Reset Password" class="change_pass align-self-end text-success fa fa-refresh" ></i>'
@@ -2361,7 +2361,7 @@ class Accounts_form extends common
                     'size' => '20',
                     'class' => "text field medium"
                 ),
-                'required|notMatch[number]|chk_password_expression',
+                $this->CI->common->edit_password_rules('accounts', $id, 'password', 'required|notMatch[number]'),
                 'tOOL TIP',
                 ''
             );
@@ -2551,7 +2551,7 @@ class Accounts_form extends common
                     'onmouseover' => 'seetext(password)',
                     'onmouseout' => 'hidepassword(password)'
                 ),
-                'required|chk_password_expression',
+                'required',
                 'tOOL TIP',
                 '',
                 '<i style="cursor:pointer; font-size: 17px; position:absolute; right:20px; bottom: 7px;" title="Reset Password" class="change_pass align-self-end text-success fa fa-refresh" ></i>'

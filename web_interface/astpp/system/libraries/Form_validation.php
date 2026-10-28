@@ -1554,35 +1554,19 @@ class CI_Form_validation {
 	        {
 		        return (!preg_match('/^[a-zA-Z0-9]+$/', $str)) ? FALSE : TRUE;
 	        }
-	    public function chk_password_expression( $str ) {
-
-    		$password_type = common_model::$global_config ['system_config'] ['password_type'];
-
-    		if( $password_type == '0' ) {
-    			if(1 !== preg_match('/^(?=.*\d)(?=.*[A-Za-z])[0-9A-Za-z!@#$%^&*()+]{8,}$/', $str)) {
-				if (strpos($str, ';') || strpos($str, '=') || strpos($str, '?') || strpos($str, ',') || strpos($str, '&')  || strpos($str, ':') || strpos($str, '[') || strpos($str, ']')  || strpos($str, '+') || strpos($str, '/') || strpos($str, "'") !== false) {
-            		$this->CI->form_validation->set_message('chk_password_expression', gettext("%s must be at least 8 characters and must contain at least one lower case letter, one upper case letter and one digit and any special characters must have included NOTE (?;=,&:\[]+/) not allowed in special characters"));
-                	return FALSE;
-				}
-			    } else {
-		        
-		        	return TRUE;
-		    	}
-
-    		} else {
-
-    			if(1 !== preg_match('/^(?=.*\d)(?=.*[A-Za-z])[0-9A-Za-z!@#$%]{8,255}$/', $str)) {
-    				
-		        	$this->CI->form_validation->set_message('chk_password_expression', gettext('%s must be at least 8 characters not contains any special characters expect . and _ and not start with numbers or space not allowed'));
-			        
-			        return FALSE;
-
-			    } else {
-
-		        	return TRUE;
-
-		    	}
-    		}
+	    public function chk_password_expression($str) {
+			$hard = common_model::$global_config['system_config']['password_type'] == '0';
+			$expression = $hard
+				? '/^(?=.*\d)(?=.*[A-Za-z])[0-9A-Za-z!@#$%^&*()+]{8,}\z/'
+				: '/^(?=.*\d)(?=.*[A-Za-z])[0-9A-Za-z!@#$%]{8,255}\z/';
+			if (!is_string($str) || preg_match($expression, $str) !== 1) {
+				$message = $hard
+					? '%s must contain at least 8 characters, including a letter and a digit. Allowed special characters: !@#$%^&*()+'
+					: '%s must contain 8 to 255 characters, including a letter and a digit. Allowed special characters: !@#$%';
+				$this->CI->form_validation->set_message('chk_password_expression', gettext($message));
+				return FALSE;
+			}
+			return TRUE;
 		}
 		public function alpha_dash_numeric_space($str){
 			return ( ! preg_match("/^[._A-Za-z0-9\s]+$/", $str)) ? FALSE : TRUE;

@@ -277,7 +277,7 @@
                         $add_array['credit_limit'] = 0;
                     }
 
-                    $add_array['password'] = $this->common->encode($add_array['password']);
+                    $add_array['password'] = $this->common->account_password_for_save($add_array['password'], $add_array['id']);
                     $add_array['credit_limit'] = $this->common_model->add_calculate_currency($add_array['credit_limit'], '', '', false, false);
 
                     $query = $this->accounts_model->remove_all_account_tax($add_array['id']);
@@ -1702,7 +1702,7 @@ function reseller_save()
                     "id" => $add_array['id']
                 ))->first_row();
                 unset($add_array['is_distributor']);
-                $add_array['password'] = $this->common->encode($add_array['password']);
+                $add_array['password'] = $this->common->account_password_for_save($add_array['password'], $add_array['id']);
                 $this->accounts_model->edit_account($add_array, $add_array['id']);
                 $this->session->set_flashdata('astpp_errormsg', gettext('Reseller updated successfully!'));
                 redirect(base_url() . 'accounts/reseller_list/');
@@ -1861,7 +1861,7 @@ function admin_save($add_array = false)
             if ($this->form_validation->run() == FALSE) {
                 $data['validation_errors'] = validation_errors();
             } else {
-                $add_array['password'] = $this->common->encode($add_array['password']);
+                $add_array['password'] = $this->common->account_password_for_save($add_array['password'], $add_array['id']);
                 if ($add_array['type'] == - 1) {
                     unset($add_array['status']);
                 }

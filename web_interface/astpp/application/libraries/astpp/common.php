@@ -31,54 +31,68 @@ class common {
 		$this->CI->load->library ( 'email' );
 		$this->CI->load->library ( 'session' );
 	}
-	function generate_password() {
-
-		$length         = (common_model::$global_config ['system_config'] ['pinlength'] < 8) ? 8 : common_model::$global_config ['system_config'] ['pinlength'];
-		
-		$length=(int)$length;
-		$password_type  = common_model::$global_config ['system_config'] ['password_type'];
-		$type = !empty($type) ? $type : ($password_type == '0' ? 'hard':'simple');
-
-		if(  $type == 'hard' ) {
-
-			$available_sets = 'luds';
-			$sets = array();
-			if(strpos($available_sets, 'l') !== false)
-				$sets[] = 'abcdefghjkmnpqrstuvwxyz';
-			if(strpos($available_sets, 'u') !== false)
-				$sets[] = 'ABCDEFGHJKMNPQRSTUVWXYZ';
-			if(strpos($available_sets, 'd') !== false)
-				$sets[] = '23456789';
-			if(strpos($available_sets, 's') !== false)
-				$sets[] = '!@#$^*()';
-
-			$all = '';
-			$password = '';
-			foreach($sets as $set)
-			{
-				$password .= $set[array_rand(str_split($set))];
-				$all .= $set;
-			}
-
-			$all = str_split($all);
-			for($i = 0; $i < $length - count($sets); $i++)
-				$password .= $all[array_rand($all)];
-				$pass = str_shuffle($password);
-
-		} else {
-		
-			$alphabet    = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890';
-   			$pass        = array(); 
-   			$alphaLength = strlen($alphabet) - 1; 
-
-			for ($i = 0; $i < 8; $i++) {
-			    $n = rand(0, $alphaLength);
-			    $pass[] = $alphabet[$n];
-			}
-   		 return implode($pass); 
-		}
-		return $pass;
+	private function password_random_index($maximum) {
+		if (function_exists('random_int')) return random_int(0, $maximum);
+		// Compatibility with older PHP: rejection sampling avoids modulo bias.
+		$range = $maximum + 1;
+		$limit = floor(4294967296 / $range) * $range;
+		do {
+			$bytes = openssl_random_pseudo_bytes(4, $strong);
+			if ($bytes === false || !$strong) throw new RuntimeException('Secure password generation unavailable.');
+			$number = unpack('Nvalue', $bytes);
+			$number = $number['value'];
+		} while ($number >= $limit);
+		return (int) fmod($number, $range);
 	}
+
+	function generate_password() {
+		$config = common_model::$global_config['system_config'];
+		$hard = $config['password_type'] == '0';
+		$length = $hard ? max(8, (int)$config['pinlength']) : 8;
+		$sets = $hard
+			? array('abcdefghjkmnpqrstuvwxyz', 'ABCDEFGHJKMNPQRSTUVWXYZ', '23456789', '!@#$^*()')
+			: array('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', '0123456789');
+		$password = '';
+		foreach ($sets as $set) $password .= $set[$this->password_random_index(strlen($set) - 1)];
+		$alphabet = implode('', $sets);
+		while (strlen($password) < $length) $password .= $alphabet[$this->password_random_index(strlen($alphabet) - 1)];
+		for ($i = strlen($password) - 1; $i > 0; $i--) {
+			$j = $this->password_random_index($i);
+			$character = $password[$i];
+			$password[$i] = $password[$j];
+			$password[$j] = $character;
+		}
+		return $password;
+	}
+
+	// Only a password read from the exact edited record can bypass strength checks.
+	private function stored_edit_password($table, $id) {
+		if (!is_scalar($id) || !ctype_digit((string)$id) || (int)$id < 1 ||
+			!in_array($table, array('accounts', 'sip_devices'), true)) return false;
+		$row = $this->CI->db->get_where($table, array('id' => $id))->row_array();
+		if (!$row) return false;
+		if ($table === 'accounts') return isset($row['password']) ? $this->decode($row['password']) : false;
+		$params = isset($row['dir_params']) ? json_decode($row['dir_params'], true) : null;
+		return is_array($params) && isset($params['password']) && is_string($params['password']) ? $params['password'] : false;
+	}
+
+	function edit_password_rules($table, $id, $field, $changed_rules) {
+		$submitted = $this->CI->input->post($field, false);
+		if (is_string($submitted) && $submitted !== '' &&
+			$submitted === $this->stored_edit_password($table, $id)) return 'required';
+		return $changed_rules;
+	}
+
+	function account_password_for_save($password, $id) {
+		if (is_scalar($id) && ctype_digit((string)$id) && (int)$id > 0) {
+			$row = $this->CI->db->get_where('accounts', array('id' => $id))->row_array();
+			if (isset($row['password']) && is_string($password) && $password === $this->decode($row['password'])) {
+				return $row['password'];
+			}
+		}
+		return $this->encode($password);
+	}
+
 	function find_uniq_rendno($size = '', $field = '', $tablename = '') {
 		if ($tablename != '') {
 			$size=(int)$size;

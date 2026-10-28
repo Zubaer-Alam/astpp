@@ -133,7 +133,7 @@ class Freeswitch_form extends common
                     'value' => $password,
                     'class' => "text field medium"
                 ),
-                'trim|required|xss_clean|chk_password_expression',
+                $this->CI->common->edit_password_rules('sip_devices', $id, 'fs_password', 'trim|required|xss_clean'),
                 'tOOL TIP',
                 'Please Enter Password',
                 '<i style="cursor:pointer; font-size: 17px; position:absolute; right:20px; bottom: 7px;" title="Reset Password" class="change_pass align-self-end text-success fa fa-refresh" ></i>'
@@ -165,7 +165,7 @@ class Freeswitch_form extends common
                     'value' => $password,
                     'class' => "text field medium"
                 ),
-                'trim|required|xss_clean|chk_password_expression',
+                'trim|required|xss_clean',
                 'tOOL TIP',
                 'Please Enter Password',
                 '<i style="cursor:pointer; font-size: 17px; position:absolute; right:20px; bottom: 7px;" title="Reset Password" class="change_pass align-self-end text-success fa fa-refresh" ></i>'
@@ -2723,7 +2723,7 @@ class Freeswitch_form extends common
                     'value' => $password,
                     'class' => "text field medium"
                 ),
-                'trim|required|xss_clean|chk_password_expression',
+                $this->CI->common->edit_password_rules('sip_devices', $id, 'fs_password', 'trim|required|xss_clean'),
                 'tOOL TIP',
                 'Please Enter Password',
                 '<i style="cursor:pointer; font-size: 17px; position:absolute; right:20px; bottom: 7px;" title="Reset Password" class="change_pass align-self-end text-success fa fa-refresh" ></i>'
@@ -2755,7 +2755,7 @@ class Freeswitch_form extends common
                     'value' => $password,
                     'class' => "text field medium"
                 ),
-                'trim|required|xss_clean|chk_password_expression',
+                'trim|required|xss_clean',
                 'tOOL TIP',
                 'Please Enter Password',
                 '<i style="cursor:pointer; font-size: 17px; position:absolute; right:20px; bottom: 7px;" title="Reset Password" class="change_pass align-self-end text-success fa fa-refresh" ></i>'
