@@ -247,9 +247,12 @@ class Signup_lib {
 		return $accountinfo;
 	}
 
-	public function generate_receipt($accountinfo,$balance){
+	public function generate_receipt($accountinfo,$balance,$overrides = array()){
 			$this->CI->db->select("currency,currencyrate");
 			$currency_info = (array)$this->CI->db->get_where("currency",array("id"=>$accountinfo['currency_id']))->first_row();
+			if (!empty($overrides) && empty($currency_info)) {
+				throw new RuntimeException('Opening balance currency is missing.');
+			}
 			
 			$payment_arr = array(
 				"price"=>  $balance,
@@ -262,6 +265,7 @@ class Signup_lib {
 				"is_update_balance" => "true",
 				"is_apply_tax"=>"false"
 			);
+			$payment_arr = array_merge($payment_arr, $overrides);
 			$this->CI->payment->add_payments_transcation($payment_arr,$accountinfo,$currency_info);
 	}
 	private function _send_email($accountinfo){

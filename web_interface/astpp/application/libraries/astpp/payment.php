@@ -83,7 +83,10 @@ class payment {
 			$payment_info['invoice_type'] = "credit";
 			$invoiceid = $this->CI->invoice->receive_payment($payment_info,$account_info,$tax_calculation,$last_payment_id,$currency_info,$payment_info['invoiceid']);
 		}else{
-			if (isset($payment_info['invoice_type']) && $payment_info['invoice_type'] == 'credit') {
+			// Imports can leave a new account's exact opening credit pending scheduled invoicing.
+			// All existing callers retain the normal FIFO allocation behavior.
+			if (isset($payment_info['invoice_type']) && $payment_info['invoice_type'] == 'credit'
+				&& (!isset($payment_info['allocate_credit_to_invoices']) || $payment_info['allocate_credit_to_invoices'] != 'false')) {
 				$remaining = $this->CI->invoice->allocate_credit_to_invoices($account_info['id'], $total_amt, $last_payment_id, $payment_info, $account_info, $tax_calculation, $currency_info);
 				if ($remaining > 0) {
 					$payment_info['price'] = $remaining;

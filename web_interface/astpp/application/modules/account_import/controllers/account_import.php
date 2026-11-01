@@ -300,7 +300,8 @@ class Account_import extends MX_Controller
                     $new_array['cps'] = ! empty($add_array["cps-select"]) && ! empty($csv_data[$add_array["cps-select"]]) ? $csv_data[$add_array["cps-select"]] : $add_array['cps'];
 
                     $balance_prepaid = $default_fields['posttoexternal'] == 0 && ! empty($add_array["balance-select"]) && ! empty($csv_data[$add_array["balance-select"]]) > 0 ? $this->common_model->add_calculate_currency($csv_data[$add_array["balance-select"]], '', '', false, false) : ($default_fields['posttoexternal'] == 0 && $add_array['balance'] > 0 ? $this->common_model->add_calculate_currency($add_array['balance'], '', '', false, false) : 0);
-                    $new_array['balance'] = $default_fields['posttoexternal'] == 1 ? $opening_balance : $balance_prepaid;
+                    // Opening balances are applied once through generate_receipt().
+                    $new_array['balance'] = '0';
 
                     $credit_limit = $default_fields['posttoexternal'] == 1 && ! empty($add_array["credit_limit-select"]) && ! empty($csv_data[$add_array["credit_limit-select"]]) > 0 ? $this->common_model->add_calculate_currency($csv_data[$add_array["credit_limit-select"]], '', '', false, false) : ($default_fields['posttoexternal'] == 1 && $add_array['credit_limit'] > 0 ? $this->common_model->add_calculate_currency($add_array['credit_limit'], '', '', false, false) : 0);
 
@@ -345,13 +346,31 @@ class Account_import extends MX_Controller
 
                     $new_array['notify_credit_limit'] = '';
 
-                    $final_new_array=$new_array;
-                    if ($default_fields['posttoexternal'] == 0) {
-                        unset($final_new_array['balance']);
+                    $receipt_balance = $balance_prepaid;
+                    $receipt_overrides = array();
+                    if ($default_fields['posttoexternal'] == 1) {
+                        $receipt_balance = ltrim($opening_balance, '-');
+                        $credit = substr($opening_balance, 0, 1) === '-';
+                        $receipt_overrides = array(
+                            'description' => 'Imported opening balance',
+                            'invoice_type' => $credit ? 'credit' : 'debit',
+                            'charge_type' => $credit ? 'REFILL' : 'POSTCHARGE',
+                            // Match manual account payments, which scheduled invoicing also excludes from tax.
+                            'product_category' => '3',
+                            // Preserve the exact opening credit without allocating it to invoices.
+                            'allocate_credit_to_invoices' => 'false'
+                        );
                     }
-                    $this->db->insert('accounts', $final_new_array);
-
-                    $accountid = $this->db->insert_id();
+                    try {
+                        $accountid = $this->_create_import_account($new_array, $receipt_balance, $receipt_overrides);
+                    } catch (Throwable $exception) {
+                        log_message('error', 'Customer import opening transaction failed: ' . $exception->getMessage());
+                        $row_errors[] = sprintf(gettext('CSV row %d: Opening balance transaction failed; account was not imported.'), $key + 2);
+                        unset($number[$new_array['number']], $email[$new_array['email']]);
+                        $invalid_count++;
+                        $i++;
+                        continue;
+                    }
                     if ($default_fields['sipdevice_flag'] == 0 && $accountid > 0) {
                         $username = $username_array[$i];
                         if (! empty($add_array["sip_username-select"]) && isset($csv_data[$add_array["sip_username-select"]]) && ! isset($sip_username_array[$csv_data[$add_array["sip_username-select"]]])) {
@@ -422,9 +441,6 @@ class Account_import extends MX_Controller
                         $this->signup_lib->account_taxes($tax_id, $accountid, $current_date);
                     }
                     $new_array['id'] = $accountid;
-                    if ($default_fields['posttoexternal'] == 0 && ($balance_prepaid > 0 || $credit_limit > 0)) {
-                        $this->signup_lib->generate_receipt($new_array, $balance_prepaid, $credit_limit);
-                    }
                     $count ++;
                 } else {
                     $invalid_count ++;
@@ -447,6 +463,50 @@ class Account_import extends MX_Controller
             $data['page_title'] = gettext("Account Import Successful");
         }
         $this->load->view('view_import_error', $data);
+    }
+
+    /** Create an imported account and its opening receipt atomically. */
+    private function _create_import_account($account, $balance, $receipt_overrides)
+    {
+        $db_debug = $this->db->db_debug;
+        $trans_strict = $this->db->trans_strict;
+        $started = false;
+        $this->db->db_debug = false; // Query failures must roll back instead of exiting with a DB error page.
+        $this->db->trans_strict(false); // A failed CSV row must not poison subsequent row transactions.
+        try {
+            if ($this->db->trans_start() === false) {
+                throw new RuntimeException('Unable to start opening balance transaction.');
+            }
+            $started = true;
+            if (!$this->db->insert('accounts', $account)) {
+                throw new RuntimeException('Unable to insert imported account.');
+            }
+            $account['id'] = $this->db->insert_id();
+            if ($account['id'] <= 0) {
+                throw new RuntimeException('Imported account has no ID.');
+            }
+            if ($balance > 0) {
+                $this->signup_lib->generate_receipt($account, $balance, $receipt_overrides);
+            }
+            if (!$this->db->trans_complete()) {
+                $started = false; // trans_complete() already rolled back and reset the failed-row status.
+                throw new RuntimeException('Unable to complete opening balance transaction.');
+            }
+            $started = false;
+            return $account['id'];
+        } catch (Throwable $exception) {
+            if ($started) {
+                if ($this->db->trans_status() === false) {
+                    $this->db->trans_complete(); // Roll back and reset CI's failure flag for the next CSV row.
+                } else {
+                    $this->db->trans_rollback();
+                }
+            }
+            throw $exception;
+        } finally {
+            $this->db->db_debug = $db_debug;
+            $this->db->trans_strict($trans_strict);
+        }
     }
 
     private function _customer_column_mappings($headers, $fields, $submitted)
