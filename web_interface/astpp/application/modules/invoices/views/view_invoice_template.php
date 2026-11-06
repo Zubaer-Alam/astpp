@@ -303,7 +303,7 @@
 	<div class="panel">
 		<table class="table table-condensed" style="padding: 0;">
 			<tr class="bg_gray" style="width: 100%;">
-				<td style="width: 18%; border-bottom: 1px solid #f5f5f5;"><b><?php echo gettext('Date / Time'); ?></b>
+				<td style="width: 18%; border-bottom: 1px solid #f5f5f5;"><b><?php echo gettext('Date / Period'); ?></b>
 				</td>
 				<td style="width: 42%; border-bottom: 1px solid #f5f5f5;"><b><?php echo gettext('Description'); ?></b>
 				</td>
@@ -323,8 +323,10 @@
 				<tr style="width: 100%;">
 					<td style="width: 18%; border-bottom: 1px solid #f5f5f5;">
 						<?php
-						if (!empty($inv_data_value['created_date'])) {
-							echo date("d-m-Y H:i:s", strtotime($inv_data_value['created_date']));
+						if ($inv_data_value['order_item_id'] == 0 && in_array($inv_data_value['charge_type'], ['STANDARD', 'DID', 'LOCAL', 'CALLINGCARD', 'FREE'])) {
+							echo date('j.n.Y', strtotime($from_date)) . ' - ' . date('j.n.Y', strtotime($to_date));
+						} elseif (!empty($inv_data_value['created_date'])) {
+							echo date("d-m-Y H:i:s", strtotime($this->common->convert_GMT_to('', '', $inv_data_value['created_date'])));
 						} else {
 							echo '&nbsp;';
 						}
@@ -387,7 +389,7 @@
 					<td style="width: 18%; border-bottom: 1px solid #f5f5f5;">
 						<?php
 						if (!empty($pay_data['created_date'])) {
-							echo date("d-m-Y H:i:s", strtotime($pay_data['created_date']));
+							echo date("d-m-Y H:i:s", strtotime($this->common->convert_GMT_to('', '', $pay_data['created_date'])));
 						} else {
 							echo '&nbsp;';
 						}
@@ -441,6 +443,15 @@
 				</td>
 			</tr>
 
+			<tr class="bg_gray" style="width: 100%; font-size: 10pt;">
+				<td style="width: 60%; border-top: solid 0.3mm #ddd;">&nbsp;</td>
+				<td class="text-right" style="width: 20%; border-top: solid 0.3mm #ddd;">
+					<b><?php echo gettext('Amount to be paid'); ?>:</b>
+				</td>
+				<td class="text-right" style="width: 20%; border-top: solid 0.3mm #ddd;">
+					<b><?php echo $this->common_model->calculate_currency($this->common->currency_decimal(max(0, $amount_due)), '', '', true, false); ?></b>
+				</td>
+			</tr>
 		</table>
 	</div>
 
@@ -551,7 +562,7 @@
 							<?php echo htmlspecialchars($cdr['calltype']); ?>
 						</td>
 						<td style="width:25%; border-bottom:1px solid #f5f5f5;">
-							<?php echo date('d-m-Y H:i:s', strtotime($cdr['callstart'])); ?>
+							<?php echo date('d-m-Y H:i:s', strtotime($this->common->convert_GMT_to('', '', $cdr['callstart']))); ?>
 						</td>
 						<td style="width:10%; border-bottom:1px solid #f5f5f5;" class="text-right">
 							<?php echo $duration_str; ?>
